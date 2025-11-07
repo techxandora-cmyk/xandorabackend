@@ -1,0 +1,38 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Start Middleware Server",
+      "type": "shell",
+      "command": "cd rfid-middleware; npx nodemon src/server.js",
+      "group": "build",
+      "isBackground": true,
+      "problemMatcher": []
+    },
+    {
+      "label": "Start Worker",
+      "type": "shell",
+      "command": "cd rfid-middleware; node src/workers/scanWorker.js",
+      "group": "build",
+      "isBackground": true,
+      "problemMatcher": []
+    },
+    {
+      "label": "Start Dashboard",
+      "type": "shell",
+      "command": "cd rfid-dashboard; npm run dev",
+      "group": "build",
+      "isBackground": true,
+      "problemMatcher": []
+    },
+    {
+      "label": "Start All",
+      "dependsOn": [
+        "Start Middleware Server",
+        "Start Worker",
+        "Start Dashboard"
+      ],
+      "dependsOrder": "parallel"
+    }
+  ]
+}

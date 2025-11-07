@@ -1,0 +1,55 @@
+{
+  "info": {
+    "name": "RFID Middleware - Demo Collection",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Post Scan Batch (simulate scanner)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"reader_id\": \"DEMO-1\",\n  \"location_id\": \"WH-A\",\n  \"epcs\": [\n    { \"epc\": \"EPC-TEST-001\", \"antenna\": 1, \"rssi\": -60 },\n    { \"epc\": \"EPC-TEST-002\" }\n  ]\n}"
+        },
+        "url": {
+          "raw": "http://localhost:3000/api/v1/scan/batch",
+          "host": ["http://localhost:3000"],
+          "path": ["api", "v1", "scan", "batch"]
+        }
+      }
+    },
+    {
+      "name": "POS Reserve",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"pos_txn_id\": \"POS-1\",\n  \"store_id\": \"STORE-1\",\n  \"user\": \"cashier1\",\n  \"items\": [{ \"epc\": \"EPC-TEST-001\", \"price\": 10.0 }]\n}"
+        },
+        "url": {
+          "raw": "http://localhost:3000/api/v1/pos/reserve",
+          "host": ["http://localhost:3000"],
+          "path": ["api", "v1", "pos", "reserve"]
+        }
+      }
+    },
+    {
+      "name": "POS Confirm",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{\n  \"pos_txn_id\": \"POS-1\"\n}" },
+        "url": {
+          "raw": "http://localhost:3000/api/v1/pos/confirm",
+          "host": ["http://localhost:3000"],
+          "path": ["api", "v1", "pos", "confirm"]
+        }
+      }
+    }
+  ]
+}

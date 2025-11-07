@@ -1,0 +1,72 @@
+
+CREATE DATABASE IF NOT EXISTS middleware_db;
+USE middleware_db;
+
+CREATE TABLE IF NOT EXISTS tags (
+  epc VARCHAR(64) PRIMARY KEY,
+  sku VARCHAR(100),
+  brand VARCHAR(100),
+  color VARCHAR(50),
+  size VARCHAR(20),
+  batch VARCHAR(50),
+  sale_status ENUM('AVAILABLE','RESERVED','SOLD','RETURNED','QUARANTINE') DEFAULT 'AVAILABLE',
+  last_pos_txn VARCHAR(64),
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS groups_tbl (
+  group_id VARCHAR(64) PRIMARY KEY,
+  sku VARCHAR(100),
+  brand VARCHAR(100),
+  color VARCHAR(50),
+  size VARCHAR(20),
+  batch VARCHAR(50),
+  expected_count INT DEFAULT 0,
+  status ENUM('OPEN','SEALED','SCANNED','CLOSED') DEFAULT 'OPEN',
+  created_by VARCHAR(100),
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS group_items (
+  group_id VARCHAR(64),
+  epc VARCHAR(64),
+  added_by VARCHAR(100),
+  added_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (group_id, epc),
+  CONSTRAINT fk_groupitems_epc FOREIGN KEY (epc) REFERENCES tags(epc) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS scans (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  epc VARCHAR(64),
+  reader_id VARCHAR(50),
+  antenna_id VARCHAR(20),
+  location_id VARCHAR(50),
+  scan_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+  details JSON NULL,
+  INDEX (epc),
+  INDEX (reader_id)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS pos_transactions (
+  pos_txn_id VARCHAR(64) PRIMARY KEY,
+  pos_store_id VARCHAR(50),
+  pos_user VARCHAR(50),
+  total_amount DECIMAL(12,2),
+  currency VARCHAR(10),
+  status ENUM('RESERVED','CONFIRMED','CANCELLED','REFUNDED') DEFAULT 'RESERVED',
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  details JSON NULL
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS pos_transaction_items (
+  pos_txn_id VARCHAR(64),
+  epc VARCHAR(64) NOT NULL,
+  sku VARCHAR(100),
+  price DECIMAL(12,2),
+  PRIMARY KEY (pos_txn_id, epc),
+  CONSTRAINT fk_positems_epc FOREIGN KEY (epc) REFERENCES tags(epc) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
