@@ -1,255 +1,96 @@
-/* rfid-dashboard/src/index.css
-   Permanent purple glow on cards, Dark/Light toggle only,
-   readable buttons in Light, and a clean sidebar.
-*/
+/* src/index.css */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* ================= THEME TOKENS ================= */
-:root {
-  --bg: #ffffff;
-  --panel: #ffffff;
-  --ink: #151515;
-  --muted: rgba(0,0,0,.58);
-
-  --acc-0: #7e57ff;
-  --acc-1: #a98aff;
-  --acc-2: #5e46d6;
-
-  --stroke: rgba(0,0,0,.08);
-
-  /* permanent glow (light) */
-  --glow-outer: rgba(169,138,255,.22);
-  --glow-mid:   rgba(140,90,255,.16);
-  --glow-soft:  rgba(140,90,255,.12);
-
-  --btn-fg: #ffffff;
-  --btn-bg: var(--acc-0);
-  --btn-bg-hover: #6a49eb;
-  --btn-ring: rgba(126,87,255,.34);
-
-  --card-radius: 14px;
-
-  /* sidebar */
-  --sb-w: 240px;
-  --sb-bg: #ffffff;
-  --sb-ink: #1a1a1a;
-  --sb-stroke: rgba(0,0,0,.08);
-  --sb-hover: color-mix(in oklab, var(--acc-0) 10%, #f6f6ff);
-  --sb-active: color-mix(in oklab, var(--acc-0) 18%, #f0ecff);
-}
-
-.dark {
-  --bg: #0b0b0f;
-  --panel: #121218;
-  --ink: #f2f3f7;
-  --muted: rgba(255,255,255,.60);
-
-  --acc-0: #a98aff;
-  --acc-1: #c7b6ff;
-  --acc-2: #7a65ff;
-
-  --stroke: rgba(255,255,255,.09);
-
-  /* permanent glow (dark) */
-  --glow-outer: rgba(169,138,255,.28);
-  --glow-mid:   rgba(140,90,255,.20);
-  --glow-soft:  rgba(140,90,255,.14);
-
-  --btn-fg: #0b0b0f;
-  --btn-bg: #c9bcff;
-  --btn-bg-hover: #b9a9ff;
-  --btn-ring: rgba(201,188,255,.42);
-
-  --sb-bg: #0f0f14;
-  --sb-ink: #f2f3f7;
-  --sb-stroke: rgba(255,255,255,.08);
-  --sb-hover: color-mix(in oklab, #1a1922 70%, var(--acc-0) 30%);
-  --sb-active: color-mix(in oklab, #1e1c28 60%, var(--acc-0) 40%);
-}
-
-/* ================= BASE ================= */
-html, body, #root { height: 100%; }
-body { background: var(--bg); color: var(--ink); }
-
+/* Smooth transitions */
 * {
-  transition:
-    color .12s ease,
-    background-color .12s ease,
-    border-color .12s ease,
-    box-shadow .12s ease,
-    transform .12s ease;
+  @apply transition-colors duration-200;
 }
 
-/* ================= SIDEBAR ================= */
-.sidebar {
-  width: var(--sb-w);
-  flex: 0 0 var(--sb-w);
-  border-right: 1px solid var(--sb-stroke);
-  background: var(--sb-bg);
-  color: var(--sb-ink);
-  position: sticky;
-  top: 0;
-  height: 100dvh;
-  z-index: 40;
-}
-.sidebar-inner { display: flex; flex-direction: column; height: 100%; }
-
-.brand {
-  display: flex; align-items: center; gap: .6rem;
-  padding: 1rem 1rem 1rem 1.25rem;
-  border-bottom: 1px solid var(--sb-stroke);
-  position: sticky; top: 0; background: inherit; z-index: 1;
-}
-.brand-dot { width: 14px; height: 14px; border-radius: 50%; }
-.brand-name { font-weight: 600; letter-spacing: .2px; color: var(--ink); }
-
-.nav { padding: .5rem; display: grid; gap: .25rem; }
-.nav-link {
-  display: grid; grid-template-columns: 22px 1fr; align-items: center;
-  gap: .6rem; padding: .55rem .65rem .55rem .65rem;
-  border-radius: 10px;
-  color: var(--ink); text-decoration: none;
-  border: 1px solid transparent;
-}
-.nav-link:hover { background: var(--sb-hover); }
-.nav-active {
-  background: var(--sb-active);
-  border-color: color-mix(in oklab, var(--acc-0) 25%, transparent);
-  box-shadow: 0 0 0 4px rgba(126,87,255,.12) inset;
-}
-.nav-ico { opacity: .9; }
-.nav-text { font-size: .93rem; }
-
-.sidebar-foot { margin-top: auto; padding: .75rem 1rem; }
-.foot-pill {
-  display: inline-flex; align-items: center;
-  font-size: 12px; padding: 2px 8px; border-radius: 999px;
-  border: 1px solid var(--sb-stroke); color: var(--ink);
-  background: color-mix(in oklab, var(--panel) 85%, var(--ink) 3%);
+/* Light base */
+:root {
+  color-scheme: light;
+  background: #f7f7f8;
+  color: #0b0b0c;
 }
 
-/* Mobile drawer behavior */
-.only-mobile { display: none; }
-@media (max-width: 1024px) {
-  .sidebar { position: fixed; left: 0; top: 0; height: 100dvh; transform: translateX(-100%); box-shadow: 0 14px 40px rgba(0,0,0,.35); }
-  .sidebar-open { transform: translateX(0); }
-  .sidebar-closed { transform: translateX(-100%); }
-  .only-mobile { display: inline-flex; }
+/* Dark base */
+.dark {
+  color-scheme: dark;
+  background: #0b0b0c;
+  color: #ffffff;
 }
 
-/* ================= TOP BAR & CONTENT ================= */
-.topbar {
-  position: sticky; top: 0; z-index: 30;
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
-  border-bottom: 1px solid var(--stroke);
-  background: color-mix(in oklab, var(--panel) 85%, transparent);
-}
-.topbar-inner {
-  max-width: 72rem; margin: 0 auto; padding: .65rem 1rem;
-  display: flex; align-items: center; gap: .75rem;
-}
-.topbar-spacer { flex: 1; }
-
-.content-wrap { max-width: 72rem; margin: 0 auto; padding: 1.25rem; }
-
-/* ================= PERMANENT GLOW CARDS ================= */
+/* Glass cards */
 .glass {
-  background: var(--panel);
-  border: 1px solid var(--stroke);
-  border-radius: var(--card-radius);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(8px);
+}
+
+/* ---- Glow system (enabled by body.glow) ---- */
+
+body.glow .glass {
+  /* subtle inner ring + soft drop glow */
   box-shadow:
-    0 1px 0 rgba(255,255,255,.05) inset,
-    0 14px 26px rgba(0,0,0,.16),
-    0 0 18px 2px var(--glow-soft),
-    0 0 38px 6px var(--glow-mid),
-    0 0 74px 12px var(--glow-outer);
-  border-color: color-mix(in oklab, var(--stroke) 60%, var(--acc-1) 40%);
-}
-.glass:hover {
-  box-shadow:
-    0 1px 0 rgba(255,255,255,.06) inset,
-    0 18px 30px rgba(0,0,0,.20),
-    0 0 26px 4px var(--glow-mid),
-    0 0 60px 10px var(--glow-outer),
-    0 0 100px 16px color-mix(in oklab, var(--glow-outer) 80%, white 20%);
+    inset 0 0 0 1px rgba(255,255,255,0.06),
+    0 0 0 1px rgba(255,255,255,0.03),
+    0 0 22px rgba(167,139,250,0.25),
+    0 0 50px rgba(236,72,153,0.10);
 }
 
-/* ================= TEXT HELPERS ================= */
-.text-muted { color: var(--muted); }
-.kpi-number { font-weight: 600; letter-spacing: .2px; color: var(--ink); }
-
-/* ================= BUTTONS ================= */
-.btn {
-  display: inline-flex; align-items: center; gap: .5rem;
-  border-radius: 10px; padding: .52rem .82rem; font-size: .85rem; line-height: 1;
-  border: 1px solid var(--stroke);
-  background: color-mix(in oklab, var(--panel) 78%, var(--ink) 4%);
-  color: var(--ink);
+body.glow .glow-border {
+  position: relative;
+  isolation: isolate;
 }
-.btn:hover {
-  background: color-mix(in oklab, var(--panel) 62%, var(--ink) 9%);
-  border-color: color-mix(in oklab, var(--stroke) 55%, var(--ink) 10%);
+body.glow .glow-border::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  z-index: -1;
+  border-radius: inherit;
+  background: radial-gradient(120px 120px at 20% 15%, rgba(167,139,250,0.45), transparent 60%),
+              radial-gradient(140px 140px at 80% 80%, rgba(236,72,153,0.35), transparent 60%);
+  filter: blur(18px);
+  opacity: 0.9;
+  pointer-events: none;
 }
-
-/* Primary (Heartbeat) — readable in Light + Dark */
-.btn-primary,
-button[data-variant="primary"] {
-  background: var(--btn-bg) !important;
-  color: var(--btn-fg) !important;
-  border-color: transparent !important;
-  box-shadow: 0 0 0 0 var(--btn-ring);
-}
-.btn-primary:hover,
-button[data-variant="primary"]:hover {
-  background: var(--btn-bg-hover) !important;
-  box-shadow: 0 0 0 4px var(--btn-ring);
+/* --- Light mode visibility guardrails ---
+   Many cards/tables use text-white/xx utilities that look great in dark,
+   but become too light in true light mode. This override keeps labels
+   like “Device / Connect / Active / Heartbeat” readable without editing
+   every component.
+*/
+.light-override {
+  color: #0b0b0e; /* base text in light */
 }
 
-/* Ghost (theme toggle + misc) */
-.btn-ghost { background: transparent; color: var(--ink); }
-.btn-ghost:hover {
-  background: color-mix(in oklab, var(--panel) 62%, var(--ink) 9%);
-  border-color: color-mix(in oklab, var(--stroke) 55%, var(--ink) 10%);
+/* Make any text-*white* utilities readable in light mode */
+.light-override :where([class*="text-white"]) {
+  color: #111827 !important; /* neutral-900 */
+  opacity: 0.88;             /* similar visual weight as /80 */
 }
 
-/* Status pill (Active) — readable in light */
-.pill,
-.badge,
-.status-active {
-  display: inline-flex; align-items: center;
-  padding: 2px 8px; font-size: 12px; border-radius: 999px;
-  background: color-mix(in oklab, var(--acc-0) 35%, var(--panel));
-  color: #fff;
-  border: 1px solid color-mix(in oklab, var(--acc-0) 40%, transparent);
+/* Subtle contrast for “muted” whites like text-white/50 etc. */
+.light-override :where([class*="text-white/"]) {
+  color: #374151 !important; /* neutral-700 */
+  opacity: 0.9;
 }
 
-/* ================= TABLE ================= */
-.table { width: 100%; border-collapse: separate; border-spacing: 0; }
-.table th, .table td {
-  padding: .85rem 1rem;
-  border-bottom: 1px solid var(--stroke);
-  color: var(--ink);
+/* Badges/chips that relied on “white on translucent” */
+.light-override :where(.chip,.badge) {
+  color: #0f172a !important;           /* slate-900 */
+  background: rgba(15, 23, 42, 0.06);  /* faint slate */
+  border-color: rgba(2, 6, 23, 0.12);  /* slate-950/12 */
 }
-.table tr:last-child td { border-bottom: 0; }
+/* Reduce tiny flicker on header blur when toggling */
+.light-override header {
+  /* ✅ Standard property */
+  transform: translateZ(0);
 
-/* Keep table action buttons visible in Light */
-.table .btn:not(.btn-primary),
-.table button:not(.btn-primary):not([data-variant="primary"]) {
-  color: var(--ink);
-  border-color: var(--stroke);
-  background: color-mix(in oklab, var(--panel) 86%, var(--ink) 2%);
+  /* ✅ Vendor prefix for Safari optimization */
+  -webkit-transform: translateZ(0);
+
+  will-change: background-color, color;
 }
 
-/* ================= KILL LEGACY GLOW/RADAR TOGGLES ================= */
-#glow-toggle,
-.glow-toggle,
-[data-role="toggle-glow"] { display: none !important; }
-.glow-halo,
-.hud-radar,
-.hud-radar::before,
-.hud-radar::after { display: none !important; }
+
