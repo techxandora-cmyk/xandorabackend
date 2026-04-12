@@ -1,13 +1,21 @@
 import { Navigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 
-export default function PermissionRoute({ anyOf = [], children }) {
-  const { loading, isAuthenticated, hasPermission } = useAuth();
+export default function PermissionRoute({ anyOf = [], masterAdminOnly = false, children }) {
+  const { loading, isAuthenticated, hasPermission, isMasterAdmin } = useAuth();
 
   if (loading) return null;
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
+  }
+
+  if (masterAdminOnly && !isMasterAdmin) {
+    return (
+      <div className="rounded border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+        You do not have permission to view this section.
+      </div>
+    );
   }
 
   const required = Array.isArray(anyOf) ? anyOf.filter(Boolean) : [];

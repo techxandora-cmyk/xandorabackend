@@ -48,7 +48,7 @@ export default function AdminLayout() {
           </NavLink>
         )}
 
-        {(isMasterAdmin || hasPermission("dashboard.manage_users")) && (
+        {isMasterAdmin && (
           <NavLink
             to="/admin/software"
             className={({ isActive }) =>
