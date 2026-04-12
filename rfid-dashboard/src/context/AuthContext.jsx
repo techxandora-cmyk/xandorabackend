@@ -171,10 +171,17 @@ export function AuthProvider({ children }) {
     store.setItem("zyro_jwt", token);
     store.setItem("zyro_user", JSON.stringify(fullUser));
 
-    // Clear stale tenant/store switch state on new login.
-    localStorage.removeItem("zyro_store_id");
+    // Clear stale tenant/store switch state on new login,
+    // then seed the store from the token so pages load immediately.
     localStorage.removeItem("zyro_company_view");
     setCompanyView("");
+    const firstStore = decoded.default_store_id ||
+      (Array.isArray(decoded.store_ids) && decoded.store_ids[0]) || "";
+    if (firstStore) {
+      localStorage.setItem("zyro_store_id", firstStore);
+    } else {
+      localStorage.removeItem("zyro_store_id");
+    }
   }
 
   /* =========================
