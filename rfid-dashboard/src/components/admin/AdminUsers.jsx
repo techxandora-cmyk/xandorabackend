@@ -671,7 +671,7 @@ export default function AdminUsers() {
 
             {!GLOBAL_ROLES.has(role) && (
               <select
-                className="px-3 py-2 rounded bg-black/40 border border-white/20 min-w-56"
+                className="px-3 py-2 rounded bg-black/40 border border-white/20 w-full sm:min-w-56"
                 value={storeId}
                 onChange={(e) => setStoreId(e.target.value)}
                 disabled={storesLoading || !createCompanyName || !createCompanyStores.length}
@@ -787,7 +787,7 @@ export default function AdminUsers() {
             {isMasterAdmin && (
               <>
                 <input
-                  className="px-3 py-1.5 text-xs rounded bg-black/40 border border-white/20 min-w-52"
+                  className="px-3 py-1.5 text-xs rounded bg-black/40 border border-white/20 w-full sm:min-w-52"
                   placeholder="Filter by company name"
                   value={companyFilter}
                   onChange={(e) => setCompanyFilter(e.target.value)}
@@ -941,7 +941,7 @@ function RoleRow({
             <span className="opacity-70">Global</span>
           ) : (
             <select
-              className="px-2 py-1 rounded bg-black/40 border border-white/20 min-w-56"
+              className="px-2 py-1 rounded bg-black/40 border border-white/20 w-full lg:min-w-56"
               value={draft.store_id}
               disabled={isProtected || !hasCompanyStores}
               onChange={(e) =>

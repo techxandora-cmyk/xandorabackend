@@ -630,7 +630,7 @@ export default function Layout() {
                   value={companyView}
                   onChange={(e) => onCompanyChange(e.target.value)}
                   className={[
-                    "min-w-[200px] rounded border px-2 py-1 text-xs focus:outline-none",
+                    "w-full sm:min-w-[200px] rounded border px-2 py-1 text-xs focus:outline-none",
                     selectClass,
                   ].join(" ")}
                   title="Account Switch"
@@ -703,7 +703,7 @@ export default function Layout() {
             {open && (
               <div
                 className={[
-                  "absolute right-0 top-12 w-52 rounded-xl border backdrop-blur-xl shadow-lg",
+                  "absolute right-0 top-12 w-52 max-w-[90vw] rounded-xl border backdrop-blur-xl shadow-lg",
                   isDark
                     ? "border-white/12 bg-[#091523]/95"
                     : "border-[#A3B8CC]/75 bg-white/95",

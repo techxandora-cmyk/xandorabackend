@@ -765,7 +765,7 @@ export default function Devices() {
                 <Fragment key={d.device_id}>
                   <tr className="border-t border-slate-500/20 align-top">
                     <td className="px-3 py-3 font-mono">{d.device_id}</td>
-                    <td className="px-3 py-3 min-w-[220px]">
+                    <td className="px-3 py-3 min-w-[140px] lg:min-w-[220px]">
                       <div className="space-y-2">
                         <input
                           value={draft.name}
@@ -778,7 +778,7 @@ export default function Devices() {
                         </div>
                       </div>
                     </td>
-                    <td className="px-3 py-3 min-w-[180px]">
+                    <td className="px-3 py-3 min-w-[120px] lg:min-w-[180px]">
                       <div className="space-y-2">
                         <select
                           value={draft.section_profile}

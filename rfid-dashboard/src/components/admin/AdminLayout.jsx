@@ -10,7 +10,7 @@ export default function AdminLayout() {
     "border-purple-500/60 bg-purple-500/10 text-purple-300 shadow-[0_0_12px_rgba(168,85,247,0.45)]";
 
   return (
-    <div className="grid grid-cols-[220px_1fr] gap-6">
+    <div className="grid grid-cols-1 gap-6 lg:grid-cols-[220px_1fr]">
       <aside className="glass rounded-xl p-4 space-y-1">
         <h3 className="text-xs font-semibold text-purple-300 mb-3">Admin Panel</h3>
 
