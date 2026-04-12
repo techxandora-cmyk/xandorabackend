@@ -56,7 +56,10 @@ const PERMISSION_GROUPS = {
 
 export default function AdminRolePermissions() {
   const { isMasterAdmin, user } = useAuth();
-  const [activeRole, setActiveRole] = useState("ADMIN");
+  const visibleRoles = isMasterAdmin ? ROLES : ROLES.filter((r) => r.id !== "ADMIN");
+  const [activeRole, setActiveRole] = useState(() =>
+    isMasterAdmin ? "ADMIN" : "STORE_MANAGER"
+  );
   const [permissions, setPermissions] = useState({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -148,7 +151,7 @@ export default function AdminRolePermissions() {
 
       {/* ROLE TABS */}
       <div className="flex gap-2">
-        {ROLES.map((r) => (
+        {visibleRoles.map((r) => (
           <button
             key={r.id}
             onClick={() => setActiveRole(r.id)}
