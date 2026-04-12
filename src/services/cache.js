@@ -4,7 +4,8 @@ const logger = require("./logger");
 const redisUrl =
   process.env.REDIS_URL ||
   `redis://${process.env.REDIS_HOST || "127.0.0.1"}:${process.env.REDIS_PORT || 6379}`;
-const disabled = process.env.DISABLE_REDIS === "1";
+const disabled =
+  process.env.DISABLE_REDIS === "1" || process.env.DISABLE_REDIS === "true";
 const state = {
   enabled: !disabled,
   url: redisUrl,

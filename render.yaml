@@ -13,7 +13,7 @@ services:
       - key: TRUST_PROXY
         value: "true"
       - key: DISABLE_REDIS
-        value: "true"
+        value: "1"
       - key: DISABLE_RABBIT
         value: "true"
       - key: FRONTEND_ORIGIN

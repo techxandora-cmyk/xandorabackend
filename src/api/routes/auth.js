@@ -299,6 +299,11 @@ module.exports = function buildAuthRoutes(pool) {
   const router = express.Router();
 
   router.post("/login", async (req, res) => {
+    if (!process.env.JWT_SECRET) {
+      console.error("[auth/login] JWT_SECRET is not set — cannot issue tokens");
+      return res.status(500).json({ ok: false, error: "Server misconfiguration: JWT_SECRET missing" });
+    }
+
     try {
       const { email, password } = req.body;
       const productKey = normalizeProductKey(req.body?.product_key);
