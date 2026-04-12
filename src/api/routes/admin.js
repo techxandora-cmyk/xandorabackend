@@ -2169,6 +2169,14 @@ module.exports = function buildAdminRoutes(pool) {
       return res.status(500).json({ ok: false, error: "Failed to resolve scope" });
     }
 
+    // Only master admin can create ADMIN accounts
+    if (!scope.isMasterAdmin && normalizedRole === "ADMIN") {
+      return res.status(403).json({
+        ok: false,
+        error: "Only a master admin can create admin accounts.",
+      });
+    }
+
     const effectiveCompanyName = scope.isMasterAdmin
       ? requestedCompanyName
       : scope.companyName;
@@ -2783,6 +2791,14 @@ module.exports = function buildAdminRoutes(pool) {
           return res.status(400).json({
             ok: false,
             error: "You cannot delete your own account",
+          });
+        }
+
+        // Only master admin can delete user accounts
+        if (!scope.isMasterAdmin) {
+          return res.status(403).json({
+            ok: false,
+            error: "Only a master admin can delete user accounts.",
           });
         }
 

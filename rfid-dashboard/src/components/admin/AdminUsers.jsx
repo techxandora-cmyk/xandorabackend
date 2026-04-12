@@ -660,7 +660,7 @@ export default function AdminUsers() {
                 }
               }}
             >
-              {ROLE_OPTIONS.map((option) => (
+              {ROLE_OPTIONS.filter((option) => isMasterAdmin || option.value !== "ADMIN").map((option) => (
                 <option key={option.value} value={option.value}>
                   {option.label}
                 </option>
@@ -843,6 +843,7 @@ export default function AdminUsers() {
                       companyStores={companyStores}
                       isGlobalDraft={isGlobalDraft}
                       isProtected={isProtected}
+                      isMasterAdmin={isMasterAdmin}
                       onUpdateDraft={updateRoleDraft}
                       onSaveRole={saveUserRole}
                       onOpenReset={openResetPassword}
@@ -877,6 +878,7 @@ function RoleRow({
   companyStores,
   isGlobalDraft,
   isProtected,
+  isMasterAdmin,
   onUpdateDraft,
   onSaveRole,
   onOpenReset,
@@ -924,7 +926,7 @@ function RoleRow({
                 });
               }}
             >
-              {ROLE_OPTIONS.map((option) => (
+              {ROLE_OPTIONS.filter((option) => isMasterAdmin || option.value !== "ADMIN").map((option) => (
                 <option key={option.value} value={option.value}>
                   {option.label}
                 </option>
@@ -994,13 +996,15 @@ function RoleRow({
                   : "Enable"}
               </button>
 
-              <button
-                onClick={() => onDeleteUser(user)}
-                disabled={deletingUserId === user.id}
-                className="text-xs text-red-400 underline disabled:opacity-60"
-              >
-                {deletingUserId === user.id ? "Deleting..." : "Delete"}
-              </button>
+              {isMasterAdmin && (
+                <button
+                  onClick={() => onDeleteUser(user)}
+                  disabled={deletingUserId === user.id}
+                  className="text-xs text-red-400 underline disabled:opacity-60"
+                >
+                  {deletingUserId === user.id ? "Deleting..." : "Delete"}
+                </button>
+              )}
             </div>
           )}
         </td>
