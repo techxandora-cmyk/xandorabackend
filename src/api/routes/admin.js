@@ -2745,6 +2745,15 @@ module.exports = function buildAdminRoutes(pool) {
           });
         }
 
+        // Only master admin can disable/enable admin accounts
+        const targetRoles = Array.isArray(targetUser.roles) ? targetUser.roles : [];
+        if (!scope.isMasterAdmin && targetRoles.includes("ADMIN")) {
+          return res.status(403).json({
+            ok: false,
+            error: "Only a master admin can disable or enable admin accounts.",
+          });
+        }
+
         await pool.query(
           `
           UPDATE users

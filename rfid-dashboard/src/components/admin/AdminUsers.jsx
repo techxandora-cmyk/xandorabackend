@@ -984,17 +984,19 @@ function RoleRow({
                 Reset Password
               </button>
 
-              <button
-                onClick={() => onToggleUser(user)}
-                disabled={togglingUserId === user.id}
-                className="text-xs underline disabled:opacity-60"
-              >
-                {togglingUserId === user.id
-                  ? "Updating..."
-                  : user.is_active
-                  ? "Disable"
-                  : "Enable"}
-              </button>
+              {(isMasterAdmin || !hasRole(user, "ADMIN")) && (
+                <button
+                  onClick={() => onToggleUser(user)}
+                  disabled={togglingUserId === user.id}
+                  className="text-xs underline disabled:opacity-60"
+                >
+                  {togglingUserId === user.id
+                    ? "Updating..."
+                    : user.is_active
+                    ? "Disable"
+                    : "Enable"}
+                </button>
+              )}
 
               {isMasterAdmin && (
                 <button
