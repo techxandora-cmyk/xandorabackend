@@ -2258,6 +2258,20 @@ module.exports = function buildAdminRoutes(pool) {
         }
       }
 
+      // Auto-assign all company-purchased products to the new user
+      if (effectiveCompanyName) {
+        await ensureProductAccessTables(client);
+        const companyProds = await getEnabledCompanyProducts(client, effectiveCompanyName);
+        for (const productKey of companyProds) {
+          await client.query(
+            `INSERT INTO user_products (user_id, product_key, is_enabled, created_by_user_id, created_by_email)
+             VALUES ($1, $2, TRUE, $3, $4)
+             ON CONFLICT (user_id, product_key) DO NOTHING`,
+            [u.rows[0].id, productKey, scope.userId || null, req.user?.email || null]
+          );
+        }
+      }
+
       await client.query("COMMIT");
 
       res.json({ ok: true });
