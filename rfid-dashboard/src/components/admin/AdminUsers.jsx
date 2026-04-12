@@ -625,6 +625,7 @@ export default function AdminUsers() {
           <input
             className="w-full px-3 py-2 rounded bg-black/40 border border-white/20"
             placeholder="Email"
+            autoComplete="off"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
           />
@@ -634,6 +635,7 @@ export default function AdminUsers() {
               type={showPwd ? "text" : "password"}
               className="w-full px-3 py-2 rounded bg-black/40 border border-white/20 pr-16"
               placeholder="Password"
+              autoComplete="new-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
             />
@@ -1023,6 +1025,7 @@ function RoleRow({
                 value={resetPassword}
                 onChange={(e) => setResetPassword(e.target.value)}
                 placeholder="Minimum 6 characters"
+                autoComplete="new-password"
               />
               <button
                 onClick={() => setShowResetPwd((v) => !v)}
