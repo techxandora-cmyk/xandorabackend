@@ -1,0 +1,7 @@
+{
+  "name": "Xandora Demo",
+  "currency": "LKR",
+  "inZoneTimeoutMs": 4000,
+  "simulatorIntervalMs": 1400,
+  "notes": "Replace products.json and epc_map.json with customer sample data before demos."
+}

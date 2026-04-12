@@ -1,0 +1,21 @@
+[Unit]
+Description=Zyro RFID Reader Bridge (%i)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=zyro
+Group=zyro
+WorkingDirectory=/opt/rfid-middleware
+EnvironmentFile=/etc/zyro-reader/%i.env
+ExecStart=/usr/bin/node /opt/rfid-middleware/zyro-llrp-bridge.js
+Restart=always
+RestartSec=3
+KillSignal=SIGINT
+TimeoutStopSec=20
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

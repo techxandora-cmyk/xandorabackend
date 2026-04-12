@@ -1,0 +1,54 @@
+# Dependency directories
+node_modules/
+rfid-dashboard/node_modules/
+
+# Build artifacts
+dist/
+build/
+coverage/
+rfid-dashboard/dist/
+
+# Local env files
+.env
+.env.*
+!.env.example
+rfid-dashboard/.env
+rfid-dashboard/.env.*
+
+# Logs and runtime outputs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+server_start_log.txt
+worker_scan_log.txt
+
+# OS/editor files
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Claude Code memory
+.claude/
+
+# Codex / temp
+.codex-logs/
+tmp/
+.logs/
+.gradle-local/
+
+# Mobile build artifacts
+mobile/xandora-handheld/android/build/
+mobile/xandora-handheld/android/app/build/
+mobile/xandora-handheld/android/.gradle/
+mobile/xandora-handheld/ios/build/
+mobile/xandora-handheld/ios/Pods/
+
+# Firebase deploy cache
+.firebase/
+
+# Test results
+rfid-dashboard/playwright-report/
+rfid-dashboard/test-results/

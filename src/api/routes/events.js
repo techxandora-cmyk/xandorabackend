@@ -1,92 +1,118 @@
-// src/api/routes/events.js
-const express = require('express');
-const router = express.Router();
+const express = require("express");
 
-const clients = new Set();        // active SSE clients
-let totalPushed = 0;
+const clients = new Set();
+const recentEvents = [];
+const MAX_RECENT_EVENTS = 500;
 
-// ---- helpers
-function sseHeaders(res) {
-  res.set({
-    'Content-Type': 'text/event-stream',
-    'Cache-Control': 'no-cache, no-transform',
-    'Connection': 'keep-alive',
-    // if you already use cors() globally you can drop the next line:
-    'Access-Control-Allow-Origin': '*',
+function pushEvent(event, data) {
+  const payloadObj = data || {};
+  const payload = JSON.stringify(payloadObj);
+
+  recentEvents.push({
+    event,
+    data: payloadObj,
+    ts: new Date().toISOString(),
   });
-  // flush headers
-  res.flushHeaders?.();
-}
+  if (recentEvents.length > MAX_RECENT_EVENTS) {
+    recentEvents.splice(0, recentEvents.length - MAX_RECENT_EVENTS);
+  }
 
-function send(res, event, data) {
-  res.write(`event: ${event}\n`);
-  res.write(`data: ${JSON.stringify(data)}\n\n`);
-}
-
-function broadcast(eventObj) {
-  totalPushed += 1;
   for (const c of clients) {
     try {
-      send(c, 'scan', eventObj);
-    } catch (_) { /* ignore */ }
+      c.res.write(`event: ${event}\n`);
+      c.res.write(`data: ${payload}\n\n`);
+    } catch {}
   }
 }
 
-// ---- GET /api/v1/events/stream (SSE)
-router.get('/stream', (req, res) => {
-  sseHeaders(res);
-  clients.add(res);
-
-  // hello event for client-side ready state
-  send(res, 'hello', { ok: true, now: Date.now(), clients: clients.size });
-
-  // keep-alive ping (prevents proxies from closing)
-  const keep = setInterval(() => {
-    try { res.write(': ping\n\n'); } catch (_) {}
-  }, 15000);
-
-  req.on('close', () => {
-    clearInterval(keep);
-    clients.delete(res);
-    try { res.end(); } catch (_) {}
-  });
-});
-
-// ---- POST /api/v1/events/simulate (push one event from scripts)
-router.post('/simulate', express.json(), (req, res) => {
-  const { tag = `EPC-${Math.random().toString(16).slice(2, 8).toUpperCase()}`,
-          device_id = 'HANDHELD-01',
-          location = 'ZONE-A',
-          type = 'read' } = req.body || {};
-
-  const event = {
-    id: `${Date.now()}-${Math.floor(Math.random()*1000)}`,
-    t: new Date().toISOString(),
-    tag, device_id, location, type
-  };
-  broadcast(event);
-  res.json({ ok: true, pushed: 1, event });
-});
-
-// ---- GET /api/v1/events/health
-router.get('/health', (_req, res) => {
-  res.json({ ok: true, clients: clients.size, totalPushed });
-});
-
-// Optional autosim (env flag): SIMULATE_SCANS=1
-if (process.env.SIMULATE_SCANS === '1') {
-  const pools = ['ENTRY', 'SHELF-1', 'SHELF-2', 'BACKROOM', 'CASHIER', 'EXIT'];
-  setInterval(() => {
-    const event = {
-      id: `${Date.now()}-${Math.floor(Math.random()*1000)}`,
-      t: new Date().toISOString(),
-      tag: `EPC-${(Math.random()*1e8|0).toString(16).toUpperCase()}`,
-      device_id: Math.random() > 0.5 ? 'HANDHELD-01' : 'GATE-01',
-      location: pools[(Math.random()*pools.length)|0],
-      type: Math.random() > 0.9 ? 'exit' : 'read'
-    };
-    broadcast(event);
-  }, 2500);
+function clearRecentEvents() {
+  const cleared = recentEvents.length;
+  recentEvents.length = 0;
+  return cleared;
 }
 
-module.exports = router;
+module.exports = function buildEventsRoutes(pool) {
+  const router = express.Router();
+  const expectedScanKey = process.env.SCAN_API_KEY || "zyro_reader_001";
+
+  router.get("/stream", (req, res) => {
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
+
+    res.write(`event: connected\n`);
+    res.write(`data: ${JSON.stringify({ ok: true })}\n\n`);
+
+    const client = { res };
+    clients.add(client);
+
+    req.on("close", () => clients.delete(client));
+  });
+
+  router.get("/recent", (req, res) => {
+    const limit = Math.min(Number(req.query.limit || 100), MAX_RECENT_EVENTS);
+    return res.json({
+      ok: true,
+      count: Math.min(limit, recentEvents.length),
+      events: recentEvents.slice(-limit),
+    });
+  });
+
+  // Device-side ingest endpoint for middleware decision events.
+  router.post("/ingest", async (req, res) => {
+    try {
+      const key =
+        req.headers["x-scan-key"] ||
+        req.headers["x-api-key"] ||
+        req.headers["x-zyro-scan-key"];
+
+      if (!key || key !== expectedScanKey) {
+        return res.status(403).json({
+          ok: false,
+          error: "Forbidden (scan key required)",
+        });
+      }
+
+      const body = req.body || {};
+      const eventType = String(body.event_type || body.event || "rfid_decision");
+      const data = body.data && typeof body.data === "object" ? body.data : body;
+
+      pushEvent(eventType, data);
+
+      // Best effort persistence for analytics/audit
+      if (pool && data.epc) {
+        try {
+          await pool.query(
+            `
+            INSERT INTO tag_events (epc, event_type, source, data)
+            VALUES ($1, $2, $3, $4::jsonb)
+            `,
+            [
+              String(data.epc),
+              eventType,
+              String(data.source || "llrp_bridge"),
+              JSON.stringify(data),
+            ]
+          );
+        } catch (e) {
+          // Keep endpoint non-blocking if DB table/schema differs.
+          console.warn("[events/ingest] tag_events insert skipped:", e.message);
+        }
+      }
+
+      return res.json({ ok: true });
+    } catch (err) {
+      console.error("[events/ingest]", err);
+      return res.status(500).json({ ok: false, error: "Failed to ingest event" });
+    }
+  });
+
+  router.broadcastEvent = pushEvent;
+  router.pushEvent = pushEvent;
+
+  return router;
+};
+
+module.exports.pushEvent = pushEvent;
+module.exports.broadcastEvent = pushEvent;
+module.exports.clearRecentEvents = clearRecentEvents;

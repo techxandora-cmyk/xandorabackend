@@ -1,0 +1,39 @@
+services:
+  - type: web
+    name: xandora-api
+    runtime: node
+    region: oregon
+    plan: free
+    buildCommand: npm install
+    startCommand: node backend/server.js
+    healthCheckPath: /api/health/live
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: TRUST_PROXY
+        value: "true"
+      - key: DISABLE_REDIS
+        value: "true"
+      - key: DISABLE_RABBIT
+        value: "true"
+      - key: FRONTEND_ORIGIN
+        value: https://xandora-webapp.web.app
+      - key: DATABASE_URL
+        fromDatabase:
+          name: xandora-db
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: SCAN_API_KEY
+        generateValue: true
+      - key: POS_API_KEY
+        generateValue: true
+      - key: DEVICE_API_KEY
+        generateValue: true
+
+databases:
+  - name: xandora-db
+    region: oregon
+    plan: free
+    databaseName: rfid
+    user: xandora

@@ -1,71 +1,33 @@
 // src/lib/theme.js
-// Persistent theme + glow state. Applies classes to <html> and <body>.
 
-// Keys
-const LS_KEY = "rfid_ui_state";
-
-function readLS() {
-  try {
-    const raw = localStorage.getItem(LS_KEY);
-    if (!raw) return null;
-    return JSON.parse(raw);
-  } catch {
-    return null;
-  }
-}
-
-function writeLS(state) {
-  try {
-    localStorage.setItem(LS_KEY, JSON.stringify(state));
-  } catch { /* empty */ }
-}
-
-export function applyTheme(state) {
-  // dark
-  if (state.dark) {
-    document.documentElement.classList.add("dark");
-  } else {
-    document.documentElement.classList.remove("dark");
-  }
-  // glow
-  if (state.glow) {
-    document.body.classList.add("glow");
-  } else {
-    document.body.classList.remove("glow");
-  }
-}
+const KEY = "zyro_theme";
 
 export function initTheme() {
-  // defaults: dark on, glow on
-  const defaults = { dark: true, glow: true };
-  const saved = readLS();
-  const state = { ...defaults, ...(saved || {}) };
-  applyTheme(state);
-  writeLS(state);
-  return state;
-}
+  const saved = localStorage.getItem(KEY);
+  const dark = saved ? saved === "dark" : true;
 
-export function getState() {
-  const s = readLS() || { dark: true, glow: true };
-  return s;
-}
+  const root = document.documentElement;
 
-export function setState(next) {
-  applyTheme(next);
-  writeLS(next);
-  return next;
+  if (dark) {
+    root.classList.add("dark");
+  } else {
+    root.classList.remove("dark");
+  }
+
+  return { dark };
 }
 
 export function toggleDark() {
-  const s = getState();
-  const next = { ...s, dark: !s.dark };
-  setState(next);
-  return next.dark;
-}
+  const root = document.documentElement;
+  const isDark = root.classList.contains("dark");
 
-export function toggleGlow() {
-  const s = getState();
-  const next = { ...s, glow: !s.glow };
-  setState(next);
-  return next.glow;
+  if (isDark) {
+    root.classList.remove("dark");
+    localStorage.setItem(KEY, "light");
+  } else {
+    root.classList.add("dark");
+    localStorage.setItem(KEY, "dark");
+  }
+
+  return !isDark;
 }

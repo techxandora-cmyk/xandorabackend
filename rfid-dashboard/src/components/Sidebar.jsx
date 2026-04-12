@@ -1,14 +1,21 @@
 import React from "react";
-
-const items = [
-  { href: "#/", label: "Overview", short: "OV" },
-  { href: "#/devices", label: "Devices", short: "DV" },
-  { href: "#/pos", label: "POS", short: "POS" },
-  { href: "#/security", label: "Security", short: "SEC" },
-];
+import { useAuth } from "@/context/AuthContext";
 
 export default function Sidebar({ dark }) {
-  const hash = typeof location !== "undefined" ? location.hash || "#/" : "#/";
+  const { isAdmin } = useAuth();
+
+  const items = [
+    { href: "#/", label: "Overview", short: "OV" },
+    { href: "#/devices", label: "Devices", short: "DV" },
+    { href: "#/pos", label: "POS", short: "POS" },
+    { href: "#/security", label: "Security", short: "SEC" },
+    ...(isAdmin
+      ? [{ href: "#/admin", label: "Admin", short: "ADM" }]
+      : []),
+  ];
+
+  const hash =
+    typeof location !== "undefined" ? location.hash || "#/" : "#/";
 
   return (
     <aside
@@ -52,7 +59,6 @@ export default function Sidebar({ dark }) {
                 ].join(" ")}
                 title={item.label}
               >
-                {/* Dot / badge */}
                 <span
                   className={[
                     "inline-flex h-6 w-8 shrink-0 items-center justify-center rounded-lg",
@@ -66,8 +72,9 @@ export default function Sidebar({ dark }) {
                   {item.short}
                 </span>
 
-                {/* Label (hidden on narrow widths) */}
-                <span className="hidden lg:inline text-sm">{item.label}</span>
+                <span className="hidden lg:inline text-sm">
+                  {item.label}
+                </span>
               </a>
             );
           })}

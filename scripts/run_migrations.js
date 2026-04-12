@@ -2,16 +2,7 @@ const fs = require("fs");
 const path = require("path");
 const { Client } = require("pg");
 require("dotenv").config();
-
-const MIGRATION_ORDER = [
-  "000_create_tables_postgres.sql",
-  "010_postgres_feature_tables.sql",
-  "20251111_add_anomaly_rules.sql",
-  "20260219_tag_registry_and_handheld_role.sql",
-  "20260219_alerts_schema_compat.sql",
-  "20260219_incident_case_management.sql",
-  "20260223_users_updated_at_compat.sql",
-];
+const { getMigrationsDir, listExpectedMigrations } = require("../src/config/migrations");
 
 function buildPgConfig() {
   if (process.env.DATABASE_URL) {
@@ -72,12 +63,8 @@ async function runFile(client, filePath) {
 }
 
 async function main() {
-  const migrationsDir = path.resolve(__dirname, "..", "migrations");
-  const existing = new Set(
-    fs.readdirSync(migrationsDir).filter((f) => f.toLowerCase().endsWith(".sql"))
-  );
-
-  const targets = MIGRATION_ORDER.filter((f) => existing.has(f));
+  const migrationsDir = getMigrationsDir();
+  const targets = listExpectedMigrations();
   if (!targets.length) {
     console.log("No PostgreSQL migrations found.");
     return;

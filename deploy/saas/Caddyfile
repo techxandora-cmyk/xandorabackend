@@ -1,0 +1,12 @@
+{
+  email {$ACME_EMAIL:admin@example.com}
+}
+
+{$DOMAIN:localhost} {
+  encode gzip
+
+  @api path /api/*
+  reverse_proxy @api api:3000
+
+  reverse_proxy dashboard:80
+}

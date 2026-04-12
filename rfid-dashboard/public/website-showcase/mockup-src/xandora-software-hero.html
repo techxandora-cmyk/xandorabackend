@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="./mockup-base.css" />
+    <title>Xandora Software Hero Mockup</title>
+    <style>
+      .hero-panel {
+        position: absolute;
+        overflow: hidden;
+        border-radius: 30px;
+        border: 1px solid rgba(148, 176, 216, 0.15);
+        background: linear-gradient(180deg, rgba(8, 18, 32, 0.98), rgba(12, 26, 45, 0.98));
+        box-shadow:
+          0 56px 110px rgba(3, 8, 16, 0.52),
+          0 18px 30px rgba(8, 16, 28, 0.34),
+          inset 0 1px 0 rgba(255, 255, 255, 0.06);
+      }
+      .micro {
+        padding: 14px;
+        border-radius: 18px;
+        background: rgba(18, 35, 58, 0.85);
+        border: 1px solid rgba(148, 176, 216, 0.16);
+      }
+      .micro h3 {
+        margin: 0 0 12px;
+        font-size: 14px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="frame">
+      <div class="scene"></div>
+      <div class="glow cyan" style="left: 188px; top: 138px; width: 360px; height: 220px;"></div>
+      <div class="glow blue" style="left: 790px; top: 178px; width: 380px; height: 220px;"></div>
+      <div class="glow violet" style="right: 120px; bottom: 110px; width: 420px; height: 240px;"></div>
+
+      <div class="badge-chip" style="left: 100px; top: 92px;">
+        <span class="status-dot cyan"></span>
+        Platform Snapshot
+      </div>
+
+      <section class="hero-panel" style="left: 286px; top: 124px; width: 1030px; height: 598px; transform: translateZ(0);">
+        <div class="topbar">
+          <div class="topbar-left">
+            <div class="window-dots">
+              <span class="window-dot"></span>
+              <span class="window-dot"></span>
+              <span class="window-dot"></span>
+            </div>
+            <div class="brand">
+              <span class="brand-mark"></span>
+              <span>Xandora RFID Dashboard</span>
+            </div>
+          </div>
+          <div class="toolbar">
+            <span class="pill accent">Overview</span>
+            <span class="pill">Admin</span>
+            <span class="pill">Alerts</span>
+          </div>
+        </div>
+
+        <div class="surface">
+          <div class="heading">
+            <div>
+              <h1>Realtime RFID Operations</h1>
+              <p>One platform for checkout, stock visibility, devices, and alerts.</p>
+            </div>
+            <div class="meta">
+              <div>All stores</div>
+              <div>Live mode</div>
+            </div>
+          </div>
+
+          <div class="metrics cols-4">
+            <div class="metric"><div class="label">Scans Today</div><div class="value">2.4k</div></div>
+            <div class="metric"><div class="label">Devices</div><div class="value">18</div></div>
+            <div class="metric"><div class="label">Alerts</div><div class="value">14</div></div>
+            <div class="metric"><div class="label">Active Stores</div><div class="value">5</div></div>
+          </div>
+
+          <div class="grid-2">
+            <div class="card">
+              <h2 class="card-title">Signal Trend</h2>
+              <div class="chart-bars">
+                <div class="bar" style="height: 44%;"></div>
+                <div class="bar" style="height: 66%;"></div>
+                <div class="bar" style="height: 55%;"></div>
+                <div class="bar" style="height: 86%;"></div>
+              </div>
+            </div>
+            <div class="card">
+              <h2 class="card-title">Live Summary</h2>
+              <div class="line-grid">
+                <div class="line-row accent"></div>
+                <div class="line-row mid"></div>
+                <div class="line-row small"></div>
+                <div class="line-row accent"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="hero-panel" style="left: 116px; top: 560px; width: 356px; height: 246px; transform: perspective(1600px) rotateX(8deg) rotateY(14deg) rotateZ(-2deg);">
+        <div class="topbar" style="height: 52px; padding: 0 18px;">
+          <div class="topbar-left">
+            <div class="window-dots">
+              <span class="window-dot"></span>
+              <span class="window-dot"></span>
+              <span class="window-dot"></span>
+            </div>
+            <div class="brand"><span class="brand-mark"></span><span style="font-size: 13px;">Alerts</span></div>
+          </div>
+          <div class="pill" style="min-width: 54px; padding: 7px 10px;">Live</div>
+        </div>
+        <div class="surface">
+          <div class="stack">
+            <div class="alert-item"><span class="alert-icon high"></span><div>Changing room dwell</div><span class="alert-chip">High</span></div>
+            <div class="alert-item"><span class="alert-icon mid"></span><div>POS mismatch</div><span class="alert-chip">Open</span></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="hero-panel" style="right: 118px; top: 548px; width: 352px; height: 250px; transform: perspective(1600px) rotateX(8deg) rotateY(-14deg) rotateZ(2deg);">
+        <div class="topbar" style="height: 52px; padding: 0 18px;">
+          <div class="topbar-left">
+            <div class="window-dots">
+              <span class="window-dot"></span>
+              <span class="window-dot"></span>
+              <span class="window-dot"></span>
+            </div>
+            <div class="brand"><span class="brand-mark"></span><span style="font-size: 13px;">Devices</span></div>
+          </div>
+          <div class="pill" style="min-width: 62px; padding: 7px 10px;">18</div>
+        </div>
+        <div class="surface">
+          <div class="stack">
+            <div class="node"><span class="status"><span class="status-dot cyan"></span> Reader North</span><span>Online</span></div>
+            <div class="node"><span class="status"><span class="status-dot blue"></span> Reader South</span><span>Stable</span></div>
+          </div>
+        </div>
+      </section>
+
+      <div class="overlay-card" style="left: 120px; top: 180px; width: 210px;">
+        <h3>Bulk RFID Billing</h3>
+        <div class="big">Fast</div>
+        <div class="mini-lines">
+          <span class="accent" style="width: 100%;"></span>
+          <span style="width: 76%;"></span>
+        </div>
+      </div>
+
+      <div class="overlay-card" style="right: 120px; top: 182px; width: 214px;">
+        <h3>Store Health</h3>
+        <div class="big">Live</div>
+        <div class="mini-lines">
+          <span class="accent" style="width: 100%;"></span>
+          <span style="width: 70%;"></span>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

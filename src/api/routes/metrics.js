@@ -1,59 +1,285 @@
-// src/api/routes/metrics.js
-const express = require('express');
-const router = express.Router();
-const db = require('../../services/db');
-const logger = require('../../services/logger');
+const express = require("express");
+const {
+  authenticateJwt,
+  attachTenantScope,
+  resolveStoreScope,
+} = require("../../middleware/tenantScope");
 
-/**
- * GET /api/v1/metrics/summary
- * {
- *   total_sales_amount,
- *   total_pos_transactions,
- *   total_items_sold,
- *   items_scanned_today,
- *   items_scanned_24h,
- *   last_updated
- * }
- */
-router.get('/summary', async (_req, res) => {
-  try {
-    // POS totals
-    const [[posAgg]] = await db.query(`
-      SELECT
-        COALESCE(SUM(total_amount), 0) AS total_sales_amount,
-        COUNT(*) AS total_pos_transactions,
-        COALESCE(SUM(JSON_LENGTH(items)), 0) AS total_items_sold
-      FROM pos_transactions
-      WHERE status = 'CONFIRMED'
-    `);
+module.exports = function buildMetricsRoutes(pool) {
+  const router = express.Router();
 
-    // SCAN counters (today / 24h) based on SCAN_BATCH events
-    const [[scanToday]] = await db.query(`
-      SELECT COALESCE(SUM(JSON_EXTRACT(data, '$.count')), 0) AS scanned
-      FROM tag_events
-      WHERE event_type='SCAN_BATCH'
-        AND DATE(created_at) = CURDATE()
-    `);
-
-    const [[scan24h]] = await db.query(`
-      SELECT COALESCE(SUM(JSON_EXTRACT(data, '$.count')), 0) AS scanned
-      FROM tag_events
-      WHERE event_type='SCAN_BATCH'
-        AND created_at >= (NOW() - INTERVAL 24 HOUR)
-    `);
-
-    return res.json({
-      total_sales_amount: Number(posAgg.total_sales_amount || 0),
-      total_pos_transactions: Number(posAgg.total_pos_transactions || 0),
-      total_items_sold: Number(posAgg.total_items_sold || 0),
-      items_scanned_today: Number(scanToday.scanned || 0),
-      items_scanned_24h: Number(scan24h.scanned || 0),
-      last_updated: new Date().toISOString(),
-    });
-  } catch (err) {
-    logger.error({ err: err?.message || err }, 'metrics/summary error');
-    return res.status(500).json({ error: 'internal' });
+  function dayKeyFromValue(v) {
+    if (!v) return "";
+    if (typeof v === "string") return v.slice(0, 10);
+    if (v instanceof Date) return v.toISOString().slice(0, 10);
+    return String(v).slice(0, 10);
   }
-});
 
-module.exports = router;
+  function lastNDaysSeries(rows, valueKey, days) {
+    const valuesByDay = new Map();
+
+    for (const row of rows || []) {
+      const key = dayKeyFromValue(row.day);
+      valuesByDay.set(key, Number(row[valueKey] || 0));
+    }
+
+    const out = [];
+    for (let i = days - 1; i >= 0; i -= 1) {
+      const d = new Date(Date.now() - i * 24 * 60 * 60 * 1000);
+      const key = d.toISOString().slice(0, 10);
+      out.push(Number(valuesByDay.get(key) || 0));
+    }
+    return out;
+  }
+
+  function buildStoreFilter(storeIds, columnName = "store_id") {
+    if (storeIds === null) {
+      return {
+        clause: "",
+        params: [],
+      };
+    }
+
+    if (!Array.isArray(storeIds) || !storeIds.length) {
+      return {
+        clause: " AND 1=0",
+        params: [],
+      };
+    }
+
+    return {
+      clause: ` AND ${columnName} = ANY($1::text[])`,
+      params: [storeIds],
+    };
+  }
+
+  router.use(authenticateJwt);
+  router.use(attachTenantScope(pool));
+
+  /* =========================
+     SUMMARY
+  ========================= */
+  router.get("/summary", async (req, res) => {
+    try {
+      const store_id = req.query.store_id ? String(req.query.store_id).trim() : "";
+      const period = req.query.period || "24h";
+
+      const scope = resolveStoreScope(req, store_id);
+      if (!scope.ok) {
+        return res.status(403).json({
+          ok: false,
+          error: scope.error,
+        });
+      }
+
+      const { clause: storeFilterSql, params: storeParams } = buildStoreFilter(
+        scope.store_ids
+      );
+
+      let timeFilter = "";
+      if (period === "today") {
+        timeFilter = `AND created_at >= date_trunc('day', NOW())`;
+      } else if (period === "24h") {
+        timeFilter = `AND created_at >= NOW() - INTERVAL '24 hours'`;
+      }
+
+      const posResult = await pool.query(
+        `
+        SELECT
+          COALESCE(SUM(total_amount),0) AS total_sales_amount,
+          COALESCE(SUM(total_items),0)  AS total_items_sold
+        FROM pos_transactions
+        WHERE 1=1
+        ${storeFilterSql}
+        ${timeFilter}
+        `,
+        storeParams
+      );
+
+      const scansTodayResult = await pool.query(
+        `
+        SELECT COUNT(*)::int AS scanned_today
+        FROM scan_items
+        WHERE ts >= date_trunc('day', NOW())
+        ${storeFilterSql}
+        `,
+        storeParams
+      );
+
+      const scans24hResult = await pool.query(
+        `
+        SELECT COUNT(*)::int AS scanned_last_24h
+        FROM scan_items
+        WHERE ts >= NOW() - INTERVAL '24 hours'
+        ${storeFilterSql}
+        `,
+        storeParams
+      );
+
+      const summary = {
+        total_sales_amount: Number(posResult.rows?.[0]?.total_sales_amount) || 0,
+        total_items_sold: Number(posResult.rows?.[0]?.total_items_sold) || 0,
+        items_scanned_today: Number(scansTodayResult.rows?.[0]?.scanned_today) || 0,
+        items_scanned_24h: Number(scans24hResult.rows?.[0]?.scanned_last_24h) || 0,
+      };
+
+      return res.json({ ok: true, summary });
+    } catch (err) {
+      console.error("[metrics] summary error:", err);
+      return res.status(500).json({
+        ok: false,
+        error: "Failed to fetch metrics summary",
+      });
+    }
+  });
+
+  /* =========================
+     REVENUE TREND (7 DAYS)
+     Fallback to scan activity when no POS sales.
+  ========================= */
+  router.get("/revenue-trend", async (req, res) => {
+    try {
+      const store_id = req.query.store_id ? String(req.query.store_id).trim() : "";
+
+      const scope = resolveStoreScope(req, store_id);
+      if (!scope.ok) {
+        return res.status(403).json({
+          ok: false,
+          error: scope.error,
+        });
+      }
+
+      const { clause: storeFilterSql, params: storeParams } = buildStoreFilter(
+        scope.store_ids
+      );
+
+      const posResult = await pool.query(
+        `
+        SELECT
+          DATE(created_at) AS day,
+          COALESCE(SUM(total_amount),0) AS total
+        FROM pos_transactions
+        WHERE created_at >= NOW() - INTERVAL '7 days'
+        ${storeFilterSql}
+        GROUP BY day
+        ORDER BY day ASC
+        `,
+        storeParams
+      );
+
+      const salesValues = lastNDaysSeries(posResult.rows, "total", 7);
+      const hasSales = salesValues.some((v) => v > 0);
+
+      if (hasSales) {
+        return res.json({ ok: true, basis: "sales", values: salesValues });
+      }
+
+      const scanResult = await pool.query(
+        `
+        SELECT
+          DATE(ts) AS day,
+          COUNT(DISTINCT tag)::int AS total
+        FROM scan_items
+        WHERE ts >= NOW() - INTERVAL '7 days'
+        ${storeFilterSql}
+        GROUP BY day
+        ORDER BY day ASC
+        `,
+        storeParams
+      );
+
+      const scanValues = lastNDaysSeries(scanResult.rows, "total", 7);
+      const hasScans = scanValues.some((v) => v > 0);
+
+      return res.json({
+        ok: true,
+        basis: hasScans ? "scans" : "none",
+        values: scanValues,
+      });
+    } catch (err) {
+      console.error("[metrics] revenue-trend error:", err);
+      return res.json({ ok: false, basis: "none", values: [] });
+    }
+  });
+
+  /* =========================
+     STORE COMPARISON
+     Fallback to scan activity when no POS sales.
+  ========================= */
+  router.get("/store-comparison", async (req, res) => {
+    try {
+      const store_id = req.query.store_id ? String(req.query.store_id).trim() : "";
+      const scope = resolveStoreScope(req, store_id);
+      if (!scope.ok) {
+        return res.status(403).json({
+          ok: false,
+          error: scope.error,
+        });
+      }
+
+      const { clause: storeFilterSql, params: storeParams } = buildStoreFilter(
+        scope.store_ids
+      );
+
+      const posResult = await pool.query(
+        `
+        SELECT
+          store_id,
+          COALESCE(SUM(total_amount),0) AS value
+        FROM pos_transactions
+        WHERE store_id IS NOT NULL
+        ${storeFilterSql}
+        GROUP BY store_id
+        ORDER BY value DESC
+        LIMIT 5
+        `,
+        storeParams
+      );
+
+      const hasSales = posResult.rows.some((r) => Number(r.value || 0) > 0);
+
+      if (hasSales) {
+        return res.json({
+          ok: true,
+          basis: "sales",
+          stores: posResult.rows.map((r) => ({
+            store_id: r.store_id,
+            value: Number(r.value || 0),
+          })),
+        });
+      }
+
+      const scanResult = await pool.query(
+        `
+        SELECT
+          store_id,
+          COUNT(DISTINCT tag)::int AS value
+        FROM scan_items
+        WHERE store_id IS NOT NULL
+        ${storeFilterSql}
+          AND ts >= NOW() - INTERVAL '24 hours'
+        GROUP BY store_id
+        ORDER BY value DESC
+        LIMIT 5
+        `,
+        storeParams
+      );
+
+      const stores = scanResult.rows.map((r) => ({
+        store_id: r.store_id,
+        value: Number(r.value || 0),
+      }));
+
+      return res.json({
+        ok: true,
+        basis: stores.length ? "scans" : "none",
+        stores,
+      });
+    } catch (err) {
+      console.error("[metrics] store-comparison error:", err);
+      return res.json({ ok: false, basis: "none", stores: [] });
+    }
+  });
+
+  return router;
+};

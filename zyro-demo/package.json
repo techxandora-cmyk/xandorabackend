@@ -1,0 +1,24 @@
+{
+  "name": "zyro-demo",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Disposable POS + Inventory demo for Zyro showcases",
+  "main": "backend/server.js",
+  "scripts": {
+    "start": "node backend/server.js",
+    "start:no-sim": "cross-env DEMO_SIM_ENABLED=0 node backend/server.js",
+    "dev": "nodemon --watch backend --watch frontend -e js,json,html,css --exec \"node backend/server.js\"",
+    "check": "node --check backend/server.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^5.1.0"
+  },
+  "devDependencies": {
+    "cross-env": "^7.0.3",
+    "nodemon": "^3.1.10"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

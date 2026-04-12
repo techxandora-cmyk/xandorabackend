@@ -1,0 +1,39 @@
+{
+  "functions": {
+    "source": ".",
+    "runtime": "nodejs20",
+    "ignore": [
+      "rfid-dashboard",
+      "mobile",
+      ".git",
+      "tmp",
+      ".logs",
+      ".codex-logs",
+      "backups",
+      "zyro-demo",
+      "deploy",
+      "docs",
+      "seeds",
+      "postman_collection.json",
+      "*.log"
+    ]
+  },
+  "hosting": {
+    "public": "rfid-dashboard/dist",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "rewrites": [
+      {
+        "source": "/api/**",
+        "function": "api"
+      },
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ]
+  }
+}

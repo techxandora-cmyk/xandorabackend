@@ -1,119 +1,427 @@
-// src/App.jsx
-import React, { useEffect, useState } from "react";
-import Layout from "./components/Layout";
-import { initTheme, toggleDark, toggleGlow } from "./lib/theme";
-import { API_BASE, fetchMetrics } from "./lib/api";
-import DevicesPanel from "./components/Devices";
+import { Suspense, lazy } from "react";
+import { Routes, Route, Navigate } from "react-router-dom";
+import Layout from "@/components/Layout";
+import AdminRoute from "@/routes/AdminRoute";
+import PermissionRoute from "@/routes/PermissionRoute";
+import ProductRoute from "@/routes/ProductRoute";
+import { useAuth } from "@/context/AuthContext";
 
-function Card({ title, children, subtitle }) {
+/* Pages */
+const Login = lazy(() => import("@/pages/Login"));
+const Overview = lazy(() => import("@/pages/Overview"));
+const CheckoutOps = lazy(() => import("@/pages/CheckoutOps"));
+const Billing = lazy(() => import("@/pages/Billing"));
+const Devices = lazy(() => import("@/pages/Devices"));
+const Scans = lazy(() => import("@/pages/Scans"));
+const HandheldDevices = lazy(() => import("@/pages/HandheldDevices"));
+const Laundry = lazy(() => import("@/pages/Laundry"));
+const StockAudit = lazy(() => import("@/pages/StockAudit"));
+const Stock = lazy(() => import("@/pages/Stock"));
+const Alerts = lazy(() => import("@/pages/Alerts"));
+
+/* Admin */
+const AdminLayout = lazy(() => import("@/components/admin/AdminLayout"));
+const AdminDashboard = lazy(() => import("@/pages/AdminDashboard"));
+const MasterAdminOverview = lazy(() => import("@/pages/MasterAdminOverview"));
+const AdminUsers = lazy(() => import("@/components/admin/AdminUsers"));
+const AdminStores = lazy(() => import("@/components/admin/AdminStores"));
+const AdminAudit = lazy(() => import("@/components/admin/AdminAudit"));
+const AdminAlerts = lazy(() => import("@/components/admin/AdminAlerts"));
+const AdminContracts = lazy(() => import("@/components/admin/AdminContracts"));
+const AdminRolePermissions = lazy(
+  () => import("@/components/admin/AdminRolePermissions")
+);
+const AdminSoftwareAccess = lazy(
+  () => import("@/components/admin/AdminSoftwareAccess")
+);
+
+function RouteLoading() {
   return (
-    <div className="glass rounded-xl p-5 border border-black/10 dark:border-white/10 bg-white/60 dark:bg-white/[0.03]">
-      <div className="text-black/60 dark:text-white/70 text-[11px] mb-2">{title}</div>
-      {children}
-      {subtitle && (
-        <div className="text-[11px] text-black/50 dark:text-white/40 mt-2">
-          {subtitle}
-        </div>
-      )}
+    <div className="mx-auto w-full max-w-7xl px-4 py-6">
+      <div className="rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white/65">
+        Loading Xandora workspace...
+      </div>
     </div>
   );
 }
 
+function withRouteSuspense(children) {
+  return <Suspense fallback={<RouteLoading />}>{children}</Suspense>;
+}
+
 export default function App() {
-  const [ui, setUi] = useState({ dark: true, glow: true });
-  const [metrics, setMetrics] = useState(null);
-  const [err, setErr] = useState("");
+  return (
+    <Routes>
+      {/* LOGIN */}
+      <Route path="/login" element={withRouteSuspense(<Login />)} />
 
-  useEffect(() => {
-    setUi(initTheme());
+      {/* 🔒 MAIN LAYOUT — MUST HAVE PATH */}
+      <Route path="/" element={<Layout />}>
+        <Route index element={withRouteSuspense(<DefaultLanding />)} />
+        <Route
+          path="pos"
+          element={withRouteSuspense(
+            <ProductRoute anyOf={["retail"]}>
+              <PermissionRoute anyOf={["dashboard.view_pos", "dashboard.view_billing", "dashboard.view_recent_scans"]}>
+                <CheckoutOps />
+              </PermissionRoute>
+            </ProductRoute>
+          )}
+        />
+        <Route
+          path="billing"
+          element={withRouteSuspense(
+            <ProductRoute anyOf={["retail"]}>
+              <PermissionRoute anyOf={["dashboard.view_billing"]}>
+                <Billing />
+              </PermissionRoute>
+            </ProductRoute>
+          )}
+        />
+        <Route
+          path="devices"
+          element={withRouteSuspense(
+            <ProductRoute anyOf={["retail"]}>
+              <PermissionRoute anyOf={["dashboard.view_devices"]}>
+                <Devices />
+              </PermissionRoute>
+            </ProductRoute>
+          )}
+        />
+        <Route
+          path="scans"
+          element={withRouteSuspense(
+            <ProductRoute anyOf={["retail"]}>
+              <PermissionRoute anyOf={["dashboard.view_recent_scans"]}>
+                <Scans />
+              </PermissionRoute>
+            </ProductRoute>
+          )}
+        />
+        <Route
+          path="inventory"
+          element={withRouteSuspense(<InventoryRedirect />)}
+        />
+        <Route
+          path="laundry"
+          element={withRouteSuspense(
+            <ProductRoute anyOf={["laundry"]}>
+              <PermissionRoute anyOf={["dashboard.view_laundry", "dashboard.manage_laundry"]}>
+                <Laundry view="dashboard" />
+              </PermissionRoute>
+            </ProductRoute>
+          )}
+        />
+        <Route
+          path="laundry/inbound"
+          element={withRouteSuspense(
+            <ProductRoute anyOf={["laundry"]}>
+              <PermissionRoute anyOf={["dashboard.view_laundry", "dashboard.manage_laundry"]}>
+                <Laundry view="inbound" />
+              </PermissionRoute>
+            </ProductRoute>
+          )}
+        />
+        <Route
+          path="laundry/outbound"
+          element={withRouteSuspense(
+            <ProductRoute anyOf={["laundry"]}>
+              <PermissionRoute anyOf={["dashboard.view_laundry", "dashboard.manage_laundry"]}>
+                <Laundry view="outbound" />
+              </PermissionRoute>
+            </ProductRoute>
+          )}
+        />
+        <Route
+          path="laundry/data-entry"
+          element={withRouteSuspense(
+            <ProductRoute anyOf={["laundry"]}>
+              <PermissionRoute anyOf={["dashboard.view_laundry", "dashboard.manage_laundry"]}>
+                <Laundry view="data_entry" />
+              </PermissionRoute>
+            </ProductRoute>
+          )}
+        />
+        <Route
+          path="laundry/devices"
+          element={withRouteSuspense(
+            <ProductRoute anyOf={["laundry"]}>
+              <PermissionRoute anyOf={["dashboard.view_laundry", "dashboard.manage_laundry"]}>
+                <HandheldDevices moduleKey="laundry" />
+              </PermissionRoute>
+            </ProductRoute>
+          )}
+        />
+        <Route
+          path="stock-audit"
+          element={withRouteSuspense(
+            <ProductRoute anyOf={["stock_audit"]}>
+              <PermissionRoute anyOf={["dashboard.view_stock_audit", "dashboard.manage_stock_audit"]}>
+                <StockAudit view="dashboard" />
+              </PermissionRoute>
+            </ProductRoute>
+          )}
+        />
+        <Route
+          path="stock-audit/sessions"
+          element={withRouteSuspense(
+            <ProductRoute anyOf={["stock_audit"]}>
+              <PermissionRoute anyOf={["dashboard.view_stock_audit", "dashboard.manage_stock_audit"]}>
+                <StockAudit view="sessions" />
+              </PermissionRoute>
+            </ProductRoute>
+          )}
+        />
+        <Route
+          path="stock-audit/findings"
+          element={withRouteSuspense(
+            <ProductRoute anyOf={["stock_audit"]}>
+              <PermissionRoute anyOf={["dashboard.view_stock_audit", "dashboard.manage_stock_audit"]}>
+                <StockAudit view="findings" />
+              </PermissionRoute>
+            </ProductRoute>
+          )}
+        />
+        <Route
+          path="stock-audit/devices"
+          element={withRouteSuspense(
+            <ProductRoute anyOf={["stock_audit"]}>
+              <PermissionRoute anyOf={["dashboard.view_stock_audit", "dashboard.manage_stock_audit"]}>
+                <HandheldDevices moduleKey="stock_audit" />
+              </PermissionRoute>
+            </ProductRoute>
+          )}
+        />
+        <Route
+          path="stock"
+          element={withRouteSuspense(
+            <ProductRoute anyOf={["retail"]}>
+              <PermissionRoute anyOf={["dashboard.view_stock"]}>
+                <Stock />
+              </PermissionRoute>
+            </ProductRoute>
+          )}
+        />
+        <Route
+          path="alerts"
+          element={withRouteSuspense(
+            <ProductRoute anyOf={["retail"]}>
+              <PermissionRoute anyOf={["dashboard.view_alerts"]}>
+                <Alerts />
+              </PermissionRoute>
+            </ProductRoute>
+          )}
+        />
 
-    const load = async () => {
-      try {
-        const m = await fetchMetrics();
-        setMetrics(m);
-        setErr("");
-      } catch (e) {
-        setErr(`Failed to fetch: ${e.message}`);
-      }
-    };
-    load();
-    const id = setInterval(load, 5000);
-    return () => clearInterval(id);
-  }, []);
+        {/* 🔥 ADMIN */}
+        <Route
+          element={withRouteSuspense(
+            <ProductRoute anyOf={["portal"]}>
+              <AdminRoute />
+            </ProductRoute>
+          )}
+        >
+          <Route path="admin" element={withRouteSuspense(<AdminLayout />)}>
+            <Route
+              index
+              element={withRouteSuspense(
+                <PermissionRoute
+                  anyOf={[
+                    "dashboard.manage_users",
+                    "dashboard.manage_roles",
+                    "dashboard.view_alerts",
+                    "dashboard.view_audit_logs",
+                  ]}
+                >
+                  <AdminPortalHome />
+                </PermissionRoute>
+              )}
+            />
+            <Route
+              path="users"
+              element={withRouteSuspense(
+                <PermissionRoute anyOf={["dashboard.manage_users"]}>
+                  <AdminUsers />
+                </PermissionRoute>
+              )}
+            />
+            <Route
+              path="stores"
+              element={withRouteSuspense(
+                <PermissionRoute anyOf={["dashboard.manage_users"]}>
+                  <AdminStores />
+                </PermissionRoute>
+              )}
+            />
+            <Route
+              path="software"
+              element={withRouteSuspense(
+                <PermissionRoute anyOf={["dashboard.manage_users"]}>
+                  <AdminSoftwareAccess />
+                </PermissionRoute>
+              )}
+            />
+            <Route
+              path="roles"
+              element={withRouteSuspense(
+                <PermissionRoute anyOf={["dashboard.manage_roles"]}>
+                  <AdminRolePermissions />
+                </PermissionRoute>
+              )}
+            />
+            <Route
+              path="alerts"
+              element={withRouteSuspense(
+                <PermissionRoute anyOf={["dashboard.view_alerts", "dashboard.manage_users"]}>
+                  <AdminAlerts />
+                </PermissionRoute>
+              )}
+            />
+            <Route
+              path="contracts"
+              element={withRouteSuspense(
+                <PermissionRoute anyOf={["dashboard.manage_users"]}>
+                  <AdminContracts />
+                </PermissionRoute>
+              )}
+            />
+            <Route
+              path="audit"
+              element={withRouteSuspense(
+                <PermissionRoute anyOf={["dashboard.view_audit_logs"]}>
+                  <AdminAudit />
+                </PermissionRoute>
+              )}
+            />
+          </Route>
+        </Route>
+      </Route>
+    </Routes>
+  );
+}
 
-  const handleDark = () => {
-    const nextDark = toggleDark();
-    setUi((u) => ({ ...u, dark: nextDark }));
-  };
+function DefaultLanding() {
+  const {
+    loading,
+    isAuthenticated,
+    hasPermission,
+    productKey,
+    canAccessAdminUI,
+  } = useAuth();
 
-  const handleGlow = () => {
-    const nextGlow = toggleGlow();
-    setUi((u) => ({ ...u, glow: nextGlow }));
-  };
+  if (loading) return null;
+  if (!isAuthenticated) return <Navigate to="/login" replace />;
 
-  const fmt = (n) => (n == null ? "—" : n.toLocaleString());
-  const money = (n) => `LKR ${Number(n || 0).toFixed(2)}`;
+  if (productKey === "portal") {
+    if (canAccessAdminUI) {
+      return <Navigate to="/admin" replace />;
+    }
+    return (
+      <div className="rounded border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+        This account does not have access to the Xandora Admin Portal.
+      </div>
+    );
+  }
+
+  if (productKey === "laundry") {
+    if (hasPermission("dashboard.view_laundry") || hasPermission("dashboard.manage_laundry")) {
+      return <Navigate to="/laundry" replace />;
+    }
+    return (
+      <div className="rounded border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+        This account is not allowed to open Xandora Laundry.
+      </div>
+    );
+  }
+
+  if (productKey === "stock_audit") {
+    if (
+      hasPermission("dashboard.view_stock_audit") ||
+      hasPermission("dashboard.manage_stock_audit")
+    ) {
+      return <Navigate to="/stock-audit" replace />;
+    }
+    return (
+      <div className="rounded border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+        This account is not allowed to open Xandora Stock Audit.
+      </div>
+    );
+  }
+
+  if (hasPermission("dashboard.view_overview")) {
+    return <Overview />;
+  }
+
+  const canAccessCheckoutOps =
+    hasPermission("dashboard.view_pos") ||
+    hasPermission("dashboard.view_billing") ||
+    hasPermission("dashboard.view_recent_scans");
+
+  if (canAccessCheckoutOps) {
+    return <Navigate to="/pos" replace />;
+  }
+
+  const firstAllowed =
+    [
+      ["devices", "dashboard.view_devices"],
+      ["scans", "dashboard.view_recent_scans"],
+      ["stock", "dashboard.view_stock"],
+      ["pos", "dashboard.view_pos"],
+      ["billing", "dashboard.view_billing"],
+      ["alerts", "dashboard.view_alerts"],
+    ].find(([, perm]) => (typeof perm === "boolean" ? perm : hasPermission(perm))) || null;
+
+  if (firstAllowed) {
+    return <Navigate to={`/${firstAllowed[0]}`} replace />;
+  }
 
   return (
-    <Layout onToggleDark={handleDark} onToggleGlow={handleGlow} state={ui}>
-      <h2 className="text-xl font-semibold tracking-tight text-black dark:text-white">
-        Overview
-      </h2>
-      <div className="text-sm text-black/60 dark:text-white/50 mb-5">
-        Live KPIs from middleware API
-      </div>
+    <div className="rounded border border-white/10 bg-black/40 px-4 py-3 text-sm text-white/70">
+      No sections are assigned to this account yet.
+    </div>
+  );
+}
 
-      {err && (
-        <div className="rounded-md border border-red-600/30 bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-200 px-4 py-2 mb-4">
-          {err}
-        </div>
-      )}
+function AdminPortalHome() {
+  const { isMasterAdmin } = useAuth();
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-        <Card
-          title="Total Sales (POS)"
-          subtitle={`${fmt(metrics?.total_pos_transactions)} POS transactions`}
-        >
-          <div className="text-3xl font-semibold text-black dark:text-white">
-            {money(metrics?.total_sales_amount)}
-          </div>
-        </Card>
+  if (isMasterAdmin) {
+    return <MasterAdminOverview />;
+  }
 
-        <Card title="Items Sold (POS)" subtitle="sum of items in confirmed POS">
-          <div className="text-3xl font-semibold text-black dark:text-white">
-            {fmt(metrics?.total_items_sold)}
-          </div>
-        </Card>
+  return <AdminDashboard />;
+}
 
-        <Card title="Items Scanned Today" subtitle="handheld/reader batch scans">
-          <div className="text-3xl font-semibold text-black dark:text-white">
-            {fmt(metrics?.items_scanned_today)}
-          </div>
-        </Card>
+function InventoryRedirect() {
+  const { loading, isAuthenticated, productKey, hasPermission } = useAuth();
 
-        <Card title="Items Scanned (24h)">
-          <div className="text-3xl font-semibold text-black dark:text-white">
-            {fmt(metrics?.items_scanned_24h)}
-          </div>
-        </Card>
+  if (loading) return null;
+  if (!isAuthenticated) return <Navigate to="/login" replace />;
 
-        <Card title="API Base">
-          <div className="text-2xl font-[800] tracking-tight text-black dark:text-white">
-            {API_BASE}
-          </div>
-        </Card>
+  const canViewStock = hasPermission("dashboard.view_stock");
+  const canViewStockAudit =
+    hasPermission("dashboard.view_stock_audit") ||
+    hasPermission("dashboard.manage_stock_audit");
 
-        <Card title="Last Updated">
-          <div className="text-3xl font-semibold text-black dark:text-white">
-            {metrics?.last_updated
-              ? new Date(metrics.last_updated).toLocaleString()
-              : "—"}
-          </div>
-        </Card>
-      </div>
+  if (productKey === "stock_audit" && canViewStockAudit) {
+    return <Navigate to="/stock-audit/sessions" replace />;
+  }
 
-      {/* Devices */}
-      <DevicesPanel />
-    </Layout>
+  if (productKey === "retail" && canViewStock) {
+    return <Navigate to="/stock" replace />;
+  }
+
+  if (canViewStockAudit) {
+    return <Navigate to="/stock-audit/sessions" replace />;
+  }
+
+  if (canViewStock) {
+    return <Navigate to="/stock" replace />;
+  }
+
+  return (
+    <div className="rounded border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+      Inventory counting now lives inside Xandora Stock Audit. Use Stock for visibility and search.
+    </div>
   );
 }

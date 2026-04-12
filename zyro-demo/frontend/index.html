@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Xandora Demo</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div class="brand-wrap">
+          <div class="brand-mark">
+            <img src="./assets/xandora-icon.svg" alt="Xandora logo" />
+          </div>
+          <div class="brand-copy">
+            <h1>Xandora Demo</h1>
+            <p>RFID POS + Inventory Prototype</p>
+          </div>
+        </div>
+        <div class="status-wrap">
+          <span id="api-status" class="pill danger">API Offline</span>
+          <span id="sim-status" class="pill muted">Simulator</span>
+          <button id="sim-toggle-btn" class="btn btn-outline" type="button">Start Sim</button>
+          <button id="close-demo-btn" class="btn btn-danger" type="button">Close Xandora</button>
+        </div>
+      </header>
+
+      <nav class="tabs">
+        <button id="tab-pos" class="tab active" type="button">POS Demo</button>
+        <button id="tab-inventory" class="tab" type="button">Inventory Demo</button>
+      </nav>
+
+      <section id="pos-view" class="view active">
+        <div class="card">
+          <div class="card-head">
+            <h2>Live Scan Zone</h2>
+            <div class="inline-actions">
+              <input id="manual-epc" class="text-input" placeholder="Manual EPC" />
+              <button id="manual-scan-btn" class="btn" type="button">Inject Scan</button>
+              <button id="manual-stocktake-btn" class="btn btn-outline" type="button">
+                Inject Stocktake
+              </button>
+              <button id="refresh-btn" class="btn btn-outline" type="button">Refresh</button>
+            </div>
+          </div>
+          <p class="card-subtitle">
+            Items auto-disappear if not seen again within a few seconds.
+          </p>
+          <div class="table-wrap table-wrap-fixed" id="live-zone-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>EPC</th>
+                  <th>Product</th>
+                  <th>Category</th>
+                  <th>Price</th>
+                  <th>Seen</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody id="in-zone-body"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head">
+            <h2>POS Cart</h2>
+            <div class="inline-actions">
+              <button id="clear-cart-btn" class="btn btn-outline" type="button">Clear Cart</button>
+            </div>
+          </div>
+          <div class="metrics-row">
+            <div class="metric">
+              <span>Items</span>
+              <strong id="metric-cart-count">0</strong>
+            </div>
+            <div class="metric">
+              <span>Total</span>
+              <strong id="metric-cart-total">LKR 0.00</strong>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>EPC</th>
+                  <th>Product</th>
+                  <th>Category</th>
+                  <th>Price</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody id="cart-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section id="inventory-view" class="view">
+        <div class="card">
+          <div class="card-head">
+            <h2>Inventory Snapshot</h2>
+          </div>
+          <p class="card-subtitle">
+            Static product stock with real-time in-zone count from scan activity.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>SKU</th>
+                  <th>Product</th>
+                  <th>Category</th>
+                  <th>Unit Price</th>
+                  <th>Stock</th>
+                  <th>In Zone</th>
+                  <th>Stocktake</th>
+                  <th>Available</th>
+                </tr>
+              </thead>
+              <tbody id="inventory-body"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head">
+            <h2>Handheld Stocktake (Live)</h2>
+            <div class="inline-actions">
+              <button id="clear-stocktake-btn" class="btn btn-outline" type="button">
+                Clear Stocktake
+              </button>
+            </div>
+          </div>
+          <div class="metrics-row">
+            <div class="metric">
+              <span>Unique EPCs</span>
+              <strong id="metric-stocktake-unique">0</strong>
+            </div>
+            <div class="metric">
+              <span>Total Stocktake Scans</span>
+              <strong id="metric-stocktake-total">0</strong>
+            </div>
+          </div>
+          <div class="table-wrap table-wrap-fixed inventory-stocktake-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Time</th>
+                  <th>EPC</th>
+                  <th>Product</th>
+                  <th>Category</th>
+                  <th>Device</th>
+                  <th>Store</th>
+                  <th>Scans</th>
+                </tr>
+              </thead>
+              <tbody id="stocktake-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <h2>Event Log</h2>
+        </div>
+        <pre id="event-log" class="event-log"></pre>
+      </section>
+    </div>
+
+    <script src="./app.js"></script>
+  </body>
+</html>

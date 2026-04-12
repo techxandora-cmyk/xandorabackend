@@ -1,29 +1,80 @@
 // src/lib/api.js
-export const API_BASE =
-  import.meta.env.VITE_API_BASE || "http://localhost:3000";
 
-// ---- Metrics ----
-export async function fetchMetrics() {
-  const r = await fetch(`${API_BASE}/api/v1/metrics/summary`);
-  if (!r.ok) throw new Error(`metrics ${r.status}`);
-  return r.json();
+const BASE_URL =
+  import.meta.env.VITE_API_BASE_URL || "http://localhost:3000/api/v1";
+const REQUEST_TIMEOUT_MS = Math.min(
+  Math.max(Number(import.meta.env.VITE_API_TIMEOUT_MS || 20000), 2000),
+  60000
+);
+
+function getToken() {
+  return (
+    localStorage.getItem("zyro_jwt") ||
+    sessionStorage.getItem("zyro_jwt")
+  );
 }
 
-// ---- Devices ----
-export async function fetchDevices() {
-  const r = await fetch(`${API_BASE}/api/v1/devices`);
-  if (!r.ok) throw new Error(`devices ${r.status}`);
-  const json = await r.json();
-  // API may return { devices: [...] } or array directly; normalize:
-  return Array.isArray(json) ? json : json.devices || [];
+async function request(method, url, body, options = {}) {
+  const token = getToken();
+  const timeoutMs = Math.min(
+    Math.max(Number(options?.timeoutMs || REQUEST_TIMEOUT_MS), 500),
+    60000
+  );
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  let res;
+  try {
+    res = await fetch(`${BASE_URL}${url}`, {
+      method,
+      cache: "no-store",
+      signal: controller.signal,
+      headers: {
+        "Content-Type": "application/json",
+        "Cache-Control": "no-cache",
+        Pragma: "no-cache",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+  } catch (err) {
+    const aborted =
+      err?.name === "AbortError" ||
+      /aborted|timeout/i.test(String(err?.message || ""));
+    const error = new Error(
+      aborted ? `Request timed out after ${timeoutMs}ms` : "Failed to fetch"
+    );
+    error.status = 0;
+    error.error = error.message;
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+
+  const data = await res.json().catch(() => ({}));
+
+  if (!res.ok) {
+    const error = new Error(data?.error || "Request failed");
+    error.status = res.status;
+    error.error = data?.error;
+    throw error;
+  }
+
+  return data;
 }
 
-export async function heartbeatDevice(id) {
-  const r = await fetch(`${API_BASE}/api/v1/devices/heartbeat`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ id }),
-  });
-  if (!r.ok) throw new Error(`heartbeat ${r.status}`);
-  return r.text();
+export function apiGet(url) {
+  return request("GET", url);
+}
+
+export function apiPost(url, body) {
+  return request("POST", url, body);
+}
+
+export function apiPut(url, body) {
+  return request("PUT", url, body);
+}
+
+export function apiDelete(url) {
+  return request("DELETE", url);
 }

@@ -1,135 +1,73 @@
-﻿# 🧠 RFID Middleware System — Technical Handoff
+# RFID Middleware System - Technical Handoff
 
-## 📋 Overview
-This system provides a **complete middleware layer** between multiple **RFID scanners**, **POS terminals**, and **security workflows**.  
-It handles:
-- Tag scans from handheld scanners  
-- POS confirmations and refunds  
-- Event logging & auditing  
-- Automatic database and queue synchronization  
+## Overview
+This repository provides the middleware layer between RFID scanners, POS, and store operations dashboards.
 
-**Core Tech Stack**
-- Node.js (Express) — API
-- RabbitMQ — Queue layer
-- MySQL (Dockerized) — Persistent DB
-- Redis (optional) — Cache layer
-- PowerShell — Migration runner for Windows
+Core runtime stack:
+- Node.js + Express API
+- PostgreSQL (primary data store)
+- RabbitMQ (async queue)
+- Redis (optional cache)
+- Vite React dashboard (`rfid-dashboard`)
 
----
+## Canonical Entrypoints
+- API server: `backend/server.js`
+- Worker: `backend/worker.js`
+- Migrations: `scripts/run_migrations.js`
 
-## ⚙️ System Architecture
+## Quick Start
+1. Copy env template:
+   - `copy .env.example .env`
+2. Start dependencies:
+   - `docker compose up -d postgres rabbitmq redis`
+3. Install dependencies:
+   - `npm install`
+   - `cd rfid-dashboard && npm install`
+4. Run DB migrations:
+   - `npm run migrate`
+5. Start API:
+   - `npm run start`
+6. Start worker (separate shell):
+   - `npm run worker`
+7. Start dashboard (separate shell):
+   - `npm run dashboard`
 
-```text
-[RFID Scanners] ---> [Middleware API] ---> [RabbitMQ Queue] ---> [Worker] ---> [MySQL Database]
-                                |                                  |
-                           (Device Auth)                      (POS, Tag, Events)
-rfid-middleware/
-│
-├── src/
-│   ├── api/routes/
-│   │   ├── pos.js              # POS reserve / confirm / refund
-│   │   ├── scan.js             # RFID scan batches
-│   │   ├── security.js         # Security scanning
-│   │   ├── devices.js          # Device registry
-│   │   └── health.js           # Health endpoint
-│   ├── middleware/
-│   │   └── deviceAuth.js       # Bearer authentication middleware
-│   ├── services/
-│   │   ├── db.js               # MySQL connection
-│   │   ├── cache.js            # Redis wrapper
-│   │   ├── rabbit.js           # RabbitMQ setup
-│   │   └── logger.js           # Logging utility
-│   ├── app.js                  # Route mounting
-│   └── server.js               # Startup entrypoint
-│
-├── worker.js                   # Background worker process
-├── migrations/                 # Database migrations
-│   ├── 001_init.sql
-│   ├── 002_create_pos_and_tag_events.sql
-│
-├── scripts/
-│   └── run_migrations.ps1      # PowerShell migration runner
-│
-├── .env                        # Environment configuration
-└── README.md                   # This document
+## Common Commands
+- API dev mode: `npm run start:dev`
+- Dashboard build: `cd rfid-dashboard && npm run build`
+- Dashboard lint: `cd rfid-dashboard && npm run lint`
+- Tests: `npm test`
+- On-prem install (Windows): `npm run onprem:install`
+- On-prem update (Windows): `npm run onprem:update`
+- On-prem backup (Windows): `npm run onprem:backup`
+- Bootstrap master admin on blank DB: `npm run bootstrap:master -- --email admin@zyro.local --password "CHANGE_ME_STRONG"`
+- SaaS stack up (Docker): `npm run saas:up`
+- SaaS stack down (Docker): `npm run saas:down`
+- SaaS logs (Docker): `npm run saas:logs`
 
+## Database Notes
+- PostgreSQL is the source of truth.
+- Migration runner applies:
+  - `migrations/000_create_tables_postgres.sql`
+  - `migrations/010_postgres_feature_tables.sql`
+  - `migrations/20251111_add_anomaly_rules.sql`
+- Migration tracking table: `schema_migrations`
 
-🚀 Setup Guide
-1️⃣ Prerequisites
+## Environment Variables (minimum)
+- `PORT`
+- `FRONTEND_ORIGIN`
+- `DATABASE_URL` (or `PGHOST/PGPORT/PGUSER/PGPASSWORD/PGDATABASE`)
+- `JWT_SECRET`
+- `RABBITMQ_URL`
+- `SCAN_API_KEY`
+- `POS_API_KEY`
+- `DEVICE_API_KEY`
 
-Docker Desktop running
-
-Node.js 18+
-
-.env file copied from .env.example
-
-2️⃣ Start Databases
-docker run -d --name mysql8 -e MYSQL_ROOT_PASSWORD=rootpass -p 3306:3306 mysql:8.0
-docker run -d --name rabbit -p 5672:5672 -p 15672:15672 rabbitmq:3-management
-
-3️⃣ Install Dependencies
-npm install
-
-4️⃣ Run Migrations
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run_migrations.ps1
-
-5️⃣ Start API Server
-node src/server.js
-
-6️⃣ Start Worker
-node worker.js
-
-
-✅ You should see:
-
-API listening on 3000
-RabbitMQ connected (queue: scan_jobs)
-Worker connected to RabbitMQ.
-
-🧩 Testing Endpoints
-POS Confirm
-$body = @{
-  pos_txn_id="POS-001";
-  store_id="STORE-1";
-  user="cashier-1";
-  items=@(@{epc="EPC-TEST-001"; price=49.99}, @{epc="EPC-TEST-002"; price=50.00});
-  total=99.99
-}
-Invoke-RestMethod -Uri "http://localhost:3000/api/v1/pos/confirm" -Method POST -ContentType "application/json" -Body ($body | ConvertTo-Json -Depth 6)
-
-
-✅ Expected Response:
-
-{
-  "confirmed": 2,
-  "pos_txn_id": "POS-001"
-}
-
-Refund
-$body = @{
-  pos_txn_id="POS-001";
-  store_id="STORE-1";
-  user="cashier-1";
-  items=@(@{epc="EPC-TEST-001"}, @{epc="EPC-TEST-002"});
-}
-Invoke-RestMethod -Uri "http://localhost:3000/api/v1/pos/refund" -Method POST -ContentType "application/json" -Body ($body | ConvertTo-Json -Depth 6)
-
-Check DB Results
-$CID = docker ps --filter "ancestor=mysql:8.0" -q
-docker exec -i $CID mysql -uroot -prootpass -D middleware_db -e "SELECT * FROM pos_transactions;"
-docker exec -i $CID mysql -uroot -prootpass -D middleware_db -e "SELECT * FROM tag_events ORDER BY id DESC LIMIT 5;"
-
-🧩 Maintenance
-Task	Command
-Apply new migration	powershell -File .\scripts\run_migrations.ps1
-Restart API	node src/server.js
-Restart Worker	node worker.js
-View logs	Get-Content .\server_start_log.txt -Tail 100
-
-| Layer                   | Responsibility                      | Notes                            |
-| ----------------------- | ----------------------------------- | -------------------------------- |
-| **API (Express)**       | Handles RFID and POS requests       | JSON REST endpoints              |
-| **Worker (RabbitMQ)**   | Processes queue jobs asynchronously | Ensures non-blocking performance |
-| **MySQL**               | Core data store                     | All tag, POS, and event data     |
-| **Redis**               | Optional caching                    | Speed boost for frequent reads   |
-| **Dockerized Services** | Container orchestration             | MySQL + RabbitMQ                 |
+## Operational Notes
+- API health endpoint: `GET /api/health`
+- SSE stream: `GET /api/v1/events/stream`
+- Worker consumes from queue: `scan_jobs`
+- If Redis is unavailable, set `DISABLE_REDIS=1`
+- If RabbitMQ is unavailable for local API-only testing, set `DISABLE_RABBIT=1`
+- On-prem rollout guide: `docs/onprem-first-customer-playbook.md`
+- SaaS rollout guide: `docs/saas-launch-playbook.md`

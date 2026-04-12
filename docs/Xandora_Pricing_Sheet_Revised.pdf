@@ -1,0 +1,80 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Count 1 /Kids [3 0 R] >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595.2756 841.8898] /Resources << /Font << /F1 4 0 R /F2 5 0 R >> >> /Contents 6 0 R >>
+endobj
+4 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>
+endobj
+6 0 obj
+<< /Length 2812 >>
+stream
+0 0 0 rg
+BT /F2 22 Tf 1 0 0 1 78 776 Tm (XANDORA) Tj ET
+BT /F1 12 Tf 1 0 0 1 78 752 Tm (RFID-Based Smart Operations Platform) Tj ET
+BT /F2 14 Tf 1 0 0 1 78 716 Tm (Overview) Tj ET
+BT /F1 10 Tf 12 TL 1 0 0 1 78 690 Tm (Xandora is a modular RFID-enabled software platform built to improve) Tj T* (retail operations, inventory accuracy, and lifecycle visibility.) Tj ET
+BT /F2 14 Tf 1 0 0 1 78 646 Tm (Core Platform License) Tj ET
+BT /F1 10 Tf 12 TL 1 0 0 1 78 620 Tm (Includes dashboard, device integration, real-time streaming, admin controls,) Tj T* (API layer, and reporting foundation.) Tj T* (Pricing: LKR 1,000,000 - 1,500,000 one-time) Tj ET
+BT /F2 14 Tf 1 0 0 1 78 570 Tm (Operational Modules) Tj ET
+BT /F1 9 Tf 1 0 0 1 78 548 Tm (Retail and Stock Take can be purchased separately or bundled per store.) Tj ET
+0.36 0.36 0.36 rg
+84 520 428 18 re f
+0 0 0 rg
+1 J 1 j 0 0 0 RG 0.5 w
+84 466 428 72 re S
+172 466 m 172 538 l S
+392 466 m 392 538 l S
+84 484 m 512 484 l S
+84 502 m 512 502 l S
+84 520 m 512 520 l S
+BT /F2 10 Tf 1 0 0 1 90 525 Tm (Module) Tj ET
+BT /F2 10 Tf 1 0 0 1 178 525 Tm (Description) Tj ET
+BT /F2 10 Tf 1 0 0 1 398 525 Tm (Price) Tj ET
+BT /F1 10 Tf 1 0 0 1 90 507 Tm (Retail) Tj ET
+BT /F1 10 Tf 1 0 0 1 178 507 Tm (Billing workflows and POS validation) Tj ET
+BT /F1 10 Tf 1 0 0 1 398 507 Tm (LKR 250K - 400K per store) Tj ET
+BT /F1 10 Tf 1 0 0 1 90 489 Tm (Stock Take) Tj ET
+BT /F1 10 Tf 1 0 0 1 178 489 Tm (Inventory counts, audits, and reconciliation) Tj ET
+BT /F1 10 Tf 1 0 0 1 398 489 Tm (LKR 200K - 350K per store) Tj ET
+BT /F1 10 Tf 1 0 0 1 90 471 Tm (Laundry) Tj ET
+BT /F1 10 Tf 1 0 0 1 178 471 Tm (Lifecycle tracking and status monitoring) Tj ET
+BT /F1 10 Tf 1 0 0 1 398 471 Tm (LKR 200K - 300K per location) Tj ET
+BT /F2 14 Tf 1 0 0 1 78 430 Tm (RFID Device Scaling) Tj ET
+BT /F1 10 Tf 12 TL 1 0 0 1 78 404 Tm (First 2 readers per store included.) Tj T* (Additional readers: LKR 5,000 - 10,000/month or LKR 25,000 - 50,000 one-time.) Tj ET
+BT /F2 14 Tf 1 0 0 1 78 356 Tm (Mobile Application) Tj ET
+BT /F1 10 Tf 12 TL 1 0 0 1 78 330 Tm (Handheld scanning, sync, and operational task execution.) Tj T* (Pricing: LKR 40,000 - 75,000 per device) Tj ET
+BT /F2 14 Tf 1 0 0 1 78 296 Tm (Support & Maintenance) Tj ET
+BT /F1 10 Tf 1 0 0 1 78 270 Tm (AMC: LKR 30,000 - 80,000/month depending on deployment scale.) Tj ET
+BT /F2 14 Tf 1 0 0 1 78 242 Tm (Pilot Package) Tj ET
+BT /F1 10 Tf 12 TL 1 0 0 1 78 216 Tm (1 store bundle including Core Platform, Retail Module, Stock Take Module, and 2 readers.) Tj T* (Pricing: LKR 800,000 - 1,200,000) Tj ET
+BT /F2 14 Tf 1 0 0 1 78 182 Tm (Positioning) Tj ET
+BT /F1 10 Tf 12 TL 1 0 0 1 78 156 Tm (Xandora is a modular RFID operations platform that lets customers start) Tj T* (with the workflows they need today and add more modules as they scale.) Tj ET
+endstream
+endobj
+7 0 obj
+<< /Title (Xandora Pricing Sheet Revised) /Author (Codex) /Producer (Node.js PDF generator) >>
+endobj
+xref
+0 8
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000261 00000 n 
+0000000331 00000 n 
+0000000406 00000 n 
+0000003270 00000 n 
+trailer
+<< /Size 8 /Root 1 0 R /Info 7 0 R >>
+startxref
+3380
+%%EOF

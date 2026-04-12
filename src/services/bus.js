@@ -1,33 +1,14 @@
-﻿import { EventEmitter } from 'events';
+﻿// src/services/bus.js
+const EventEmitter = require('events');
 
 /**
- * Lightweight in-process event bus.
- * Usage:
- *   const bus = require('../services/bus');
- *   bus.publish('pos.confirmed', { ... })
- *   const off = bus.subscribe('pos.confirmed', (payload) => { ... })
- *   off(); // unsubscribe
- *
- * Also emits "*" with { topic, payload } for catch-all listeners (great for SSE).
+ * Tiny in-process event bus so routes/services can broadcast events
+ * to the SSE stream (api/v1/events/stream).
  */
-class Bus extends EventEmitter {
-  publish(topic, payload) {
-    try {
-      this.emit(topic, payload);
-      this.emit('*', { topic, payload, ts: new Date().toISOString() });
-    } catch (err) {
-      // never crash the process because a listener threw
-      // (listeners should handle their own errors)
-      // eslint-disable-next-line no-console
-      console.error('bus publish error:', err && err.message ? err.message : err);
-    }
-  }
+class Bus extends EventEmitter {}
+const bus = new Bus();
 
-  subscribe(topic, handler) {
-    this.on(topic, handler);
-    // return an unsubscribe fn
-    return () => this.off(topic, handler);
-  }
-}
+// Optional: increase max listeners if you expect many SSE clients
+bus.setMaxListeners(50);
 
-export default new Bus();
+module.exports = bus;

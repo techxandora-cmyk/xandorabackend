@@ -1,0 +1,13 @@
+node_modules
+rfid-dashboard/node_modules
+rfid-dashboard/dist
+backups
+logs
+*.log
+.git
+.vscode
+.env
+.env.*
+!*.example
+server_start_log.txt
+worker_scan_log.txt

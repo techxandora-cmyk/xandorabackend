@@ -1,0 +1,22 @@
+export const brand = {
+  name: 'Xandora',
+  colors: {
+    ink: '#091523',
+    midnight: '#091523',
+    navy: '#091523',
+    slate: '#445060',
+    cloud: '#A3B8CC',
+    mist: '#F2F9FF',
+    pearl: '#FFFFFF',
+    sky: '#EAF4FF',
+    lilac: '#F3EEFF',
+    violet: '#8C11E7',
+    blue: '#418EDA',
+    aqua: '#16F9F3',
+    mint: '#79EFEA',
+    coral: '#E06A7D',
+    gold: '#C58A1D',
+    success: '#0E8F7D',
+    danger: '#C93E4D',
+  },
+};

@@ -1,0 +1,103 @@
+services:
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${PGPASSWORD:-postgres}
+      POSTGRES_DB: ${PGDATABASE:-rfid}
+    volumes:
+      - saas-postgres-data:/var/lib/postgresql/data
+    networks:
+      - zyro-net
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    restart: unless-stopped
+    volumes:
+      - saas-rabbitmq-data:/var/lib/rabbitmq
+    networks:
+      - zyro-net
+
+  redis:
+    image: redis:7
+    restart: unless-stopped
+    networks:
+      - zyro-net
+
+  api:
+    build:
+      context: ../..
+      dockerfile: deploy/saas/Dockerfile.backend
+    restart: unless-stopped
+    env_file:
+      - ${SAAS_ENV_FILE:-./.env.saas}
+    command: sh -c "node scripts/run_migrations.js && node backend/server.js"
+    depends_on:
+      - postgres
+      - rabbitmq
+      - redis
+    networks:
+      - zyro-net
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  worker:
+    build:
+      context: ../..
+      dockerfile: deploy/saas/Dockerfile.backend
+    restart: unless-stopped
+    env_file:
+      - ${SAAS_ENV_FILE:-./.env.saas}
+    command: node backend/worker.js
+    depends_on:
+      - postgres
+      - rabbitmq
+      - redis
+    networks:
+      - zyro-net
+
+  dashboard:
+    build:
+      context: ../..
+      dockerfile: deploy/saas/Dockerfile.dashboard
+    restart: unless-stopped
+    networks:
+      - zyro-net
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/ >/dev/null 2>&1 || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+
+  edge:
+    image: caddy:2
+    restart: unless-stopped
+    env_file:
+      - ${SAAS_ENV_FILE:-./.env.saas}
+    depends_on:
+      - api
+      - dashboard
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - saas-caddy-data:/data
+      - saas-caddy-config:/config
+    networks:
+      - zyro-net
+
+networks:
+  zyro-net:
+    driver: bridge
+
+volumes:
+  saas-postgres-data:
+  saas-rabbitmq-data:
+  saas-caddy-data:
+  saas-caddy-config:

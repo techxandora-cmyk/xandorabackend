@@ -1,0 +1,17 @@
+FROM node:20-alpine
+
+WORKDIR /app
+
+COPY package*.json ./
+RUN npm ci --omit=dev
+
+COPY backend ./backend
+COPY src ./src
+COPY scripts ./scripts
+COPY migrations ./migrations
+
+ENV NODE_ENV=production
+
+EXPOSE 3000
+
+CMD ["node", "backend/server.js"]
