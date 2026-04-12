@@ -256,7 +256,7 @@ export default function App() {
             <Route
               path="software"
               element={withRouteSuspense(
-                <PermissionRoute masterAdminOnly>
+                <PermissionRoute anyOf={["dashboard.manage_users"]}>
                   <AdminSoftwareAccess />
                 </PermissionRoute>
               )}

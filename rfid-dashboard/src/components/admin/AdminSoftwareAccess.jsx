@@ -78,8 +78,11 @@ export default function AdminSoftwareAccess() {
   );
 
   const userCatalog = useMemo(
-    () => (Array.isArray(catalog) ? catalog : []).filter((item) => item?.user_assignable),
-    [catalog]
+    () =>
+      (Array.isArray(catalog) ? catalog : [])
+        .filter((item) => item?.user_assignable)
+        .filter((item) => isMasterAdmin || item?.key !== "portal"),
+    [catalog, isMasterAdmin]
   );
 
   const loadCompanyOptions = useCallback(async () => {
