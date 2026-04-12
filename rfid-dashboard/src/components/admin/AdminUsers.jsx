@@ -1000,7 +1000,7 @@ function RoleRow({
                 </button>
               )}
 
-              {isMasterAdmin && (
+              {(isMasterAdmin || !hasRole(user, "ADMIN")) && (
                 <button
                   onClick={() => onDeleteUser(user)}
                   disabled={deletingUserId === user.id}

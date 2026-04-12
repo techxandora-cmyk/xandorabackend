@@ -2803,14 +2803,6 @@ module.exports = function buildAdminRoutes(pool) {
           });
         }
 
-        // Only master admin can delete user accounts
-        if (!scope.isMasterAdmin) {
-          return res.status(403).json({
-            ok: false,
-            error: "Only a master admin can delete user accounts.",
-          });
-        }
-
         const targetUser = await getUserContextById(userId);
         if (!targetUser) {
           return res.status(404).json({
@@ -2823,6 +2815,15 @@ module.exports = function buildAdminRoutes(pool) {
           return res.status(403).json({
             ok: false,
             error: "Forbidden",
+          });
+        }
+
+        // Only master admin can delete admin accounts
+        const targetRoles = Array.isArray(targetUser.roles) ? targetUser.roles : [];
+        if (!scope.isMasterAdmin && targetRoles.includes("ADMIN")) {
+          return res.status(403).json({
+            ok: false,
+            error: "Only a master admin can delete admin accounts.",
           });
         }
 
