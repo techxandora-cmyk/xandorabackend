@@ -72,6 +72,9 @@ const pool = new Pool({
   max: PG_POOL_MAX,
   idleTimeoutMillis: PG_IDLE_TIMEOUT_MS,
   connectionTimeoutMillis: PG_CONN_TIMEOUT_MS,
+  ssl: DATABASE_URL.includes("localhost") || DATABASE_URL.includes("127.0.0.1")
+    ? false
+    : { rejectUnauthorized: false },
 });
 
 pool.on("error", (err) => {
