@@ -3,6 +3,12 @@
 require("dotenv").config();
 const bcrypt = require("bcrypt");
 const { Client } = require("pg");
+const {
+  ensureProductAccessTables,
+  normalizeProductKeys,
+} = require("../src/api/routes/lib/productAccess");
+
+const DEFAULT_MASTER_PRODUCTS = ["portal", "retail", "laundry", "stock_audit"];
 
 function parseArgs(argv) {
   const out = {};
@@ -44,6 +50,15 @@ async function main() {
   );
   const companyName = String(args.company || "Zyro").trim() || "Zyro";
   const defaultStore = String(args.store || "STORE_001").trim().toUpperCase();
+  const requestedProducts = String(
+    args.products || process.env.BOOTSTRAP_ADMIN_PRODUCTS || ""
+  )
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+  const enabledProducts = normalizeProductKeys(
+    requestedProducts.length ? requestedProducts : DEFAULT_MASTER_PRODUCTS
+  );
 
   if (!email || !email.includes("@")) {
     throw new Error("Provide --email <admin@email>");
@@ -51,12 +66,16 @@ async function main() {
   if (!password || password.length < 8) {
     throw new Error("Provide --password with at least 8 characters");
   }
+  if (!enabledProducts.length) {
+    throw new Error("Provide at least one valid product in --products");
+  }
 
   const client = new Client(getPgConfig());
   await client.connect();
 
   try {
     await client.query("BEGIN");
+    await ensureProductAccessTables(client);
 
     const hash = await bcrypt.hash(password, 10);
 
@@ -110,9 +129,31 @@ async function main() {
       );
     }
 
+    for (const productKey of enabledProducts) {
+      await client.query(
+        `
+        INSERT INTO user_products (
+          user_id,
+          product_key,
+          is_enabled,
+          created_at,
+          updated_at
+        )
+        VALUES ($1, $2, TRUE, NOW(), NOW())
+        ON CONFLICT (user_id, product_key)
+        DO UPDATE SET
+          is_enabled = TRUE,
+          updated_at = NOW()
+        `,
+        [userId, productKey]
+      );
+    }
+
     await client.query("COMMIT");
     console.log(
-      `[bootstrap] master admin ready: ${email} (company=${companyName}, store=${defaultStore})`
+      `[bootstrap] master admin ready: ${email} (company=${companyName}, store=${defaultStore}, products=${enabledProducts.join(
+        ","
+      )})`
     );
   } catch (err) {
     await client.query("ROLLBACK");
