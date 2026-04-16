@@ -1,8 +1,17 @@
-process.env.CLOUD_FUNCTION = "true";
+const isDirectRun = require.main === module;
 
-const functions = require("firebase-functions");
+if (!isDirectRun) {
+  process.env.CLOUD_FUNCTION = "true";
+}
+
 const { app } = require("../backend/server");
 
-exports.api = functions
-  .runWith({ timeoutSeconds: 540, memory: "512MB" })
-  .https.onRequest(app);
+if (isDirectRun) {
+  module.exports = { app };
+} else {
+  const functions = require("firebase-functions/v1");
+
+  exports.api = functions
+    .runWith({ timeoutSeconds: 540, memory: "512MB" })
+    .https.onRequest(app);
+}
