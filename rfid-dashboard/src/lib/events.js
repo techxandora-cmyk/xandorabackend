@@ -1,11 +1,12 @@
 // rfid-dashboard/src/lib/events.js
+import { buildEventsStreamUrl } from "@/config/api";
+
 export function subscribeEvents({
   onMetricsChanged,
   onDevicesChanged,
   onScanBatch,
 } = {}) {
-  const base = import.meta.env.VITE_API_BASE_URL || "/api/v1";
-  const url = `${base}/events/stream`;
+  const url = buildEventsStreamUrl();
 
   const es = new EventSource(url, { withCredentials: false });
 

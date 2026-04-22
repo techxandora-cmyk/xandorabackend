@@ -1,5 +1,6 @@
 // src/components/StatusIndicator.jsx
 import React, { useEffect, useRef, useState } from "react";
+import { buildEventsStreamUrl } from "@/config/api";
 
 /**
  * Tiny middleware connection indicator:
@@ -15,9 +16,7 @@ export default function StatusIndicator() {
   const esRef = useRef(null);
   const attemptsRef = useRef(0);
   const reconnectTimerRef = useRef(null);
-  const eventsUrl = `${
-    import.meta.env.VITE_API_BASE_URL || "/api/v1"
-  }/events/stream`;
+  const eventsUrl = buildEventsStreamUrl();
 
   // compute color + styles by state
   const meta = {

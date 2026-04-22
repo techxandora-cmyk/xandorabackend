@@ -97,8 +97,8 @@ module.exports = function buildBillingRoutes(pool) {
     return storeId;
   }
 
-  async function getActiveSession(storeId) {
-    const result = await pool.query(
+  async function getActiveSession(db, storeId) {
+    const result = await db.query(
       `
       SELECT *
       FROM billing_sessions
@@ -255,6 +255,103 @@ module.exports = function buildBillingRoutes(pool) {
     });
   }
 
+  async function mirrorBillingScanToLiveFeed(db, input = {}) {
+    const session = input.session || null;
+    const sessionId = buildSessionId("BILL", session || {});
+    const epc = String(input.epc || "").trim().toUpperCase();
+    const deviceId = String(input.device_id || "").trim() || "UI_MANUAL";
+    const storeId = String(input.store_id || "").trim() || null;
+    const validation = input.validation || {};
+    const scanRow =
+      input.scan_row && typeof input.scan_row === "object" ? input.scan_row : {};
+
+    if (!epc || !storeId) {
+      return null;
+    }
+
+    const firstSeen = scanRow.first_seen || scanRow.last_seen || new Date().toISOString();
+    const lastSeen = scanRow.last_seen || scanRow.first_seen || firstSeen;
+    const readCount = Math.max(toInt(scanRow.read_count || 1), 1);
+
+    const liveFeedInsert = await db.query(
+      `
+      INSERT INTO scan_items (
+        batch_id,
+        device_id,
+        tag,
+        ts,
+        store_id,
+        raw,
+        rssi,
+        read_count,
+        first_seen,
+        last_seen,
+        processing_status,
+        metrics_summary
+      )
+      VALUES (
+        NULL,
+        $1,
+        $2,
+        $3::timestamptz,
+        $4,
+        $5::jsonb,
+        NULL,
+        $6,
+        $7::timestamptz,
+        $8::timestamptz,
+        'CONFIRMED',
+        $9::jsonb
+      )
+      ON CONFLICT (device_id, tag, ts)
+      DO UPDATE SET
+        store_id = COALESCE(EXCLUDED.store_id, scan_items.store_id),
+        raw = EXCLUDED.raw,
+        read_count = GREATEST(scan_items.read_count, EXCLUDED.read_count),
+        first_seen = LEAST(
+          COALESCE(scan_items.first_seen, EXCLUDED.first_seen),
+          EXCLUDED.first_seen
+        ),
+        last_seen = GREATEST(
+          COALESCE(scan_items.last_seen, EXCLUDED.last_seen),
+          EXCLUDED.last_seen
+        ),
+        processing_status = EXCLUDED.processing_status,
+        metrics_summary = COALESCE(scan_items.metrics_summary, '{}'::jsonb) || EXCLUDED.metrics_summary,
+        updated_at = NOW()
+      RETURNING *
+      `,
+      [
+        deviceId,
+        epc,
+        firstSeen,
+        storeId,
+        JSON.stringify({
+          tag: epc,
+          store_id: storeId,
+          device_id: deviceId,
+          source: "billing_session",
+          session_id: sessionId,
+          validation_status: validation.validation_status || null,
+          validation_label: validation.validation_label || null,
+          validation_message: validation.validation_message || null,
+        }),
+        readCount,
+        firstSeen,
+        lastSeen,
+        JSON.stringify({
+          source: "billing_session",
+          session_id: sessionId,
+          validation_status: validation.validation_status || null,
+          validation_label: validation.validation_label || null,
+          read_count: readCount,
+        }),
+      ]
+    );
+
+    return liveFeedInsert.rows[0] || null;
+  }
+
   async function buildScanRows(db, storeId, session) {
     await ensureCatalogTable(db);
 
@@ -361,7 +458,7 @@ module.exports = function buildBillingRoutes(pool) {
       const storeId = await enforceStore(req, res);
       if (!storeId) return;
 
-      const existing = await getActiveSession(storeId);
+      const existing = await getActiveSession(pool, storeId);
       if (existing) {
         const summary = await loadBillingSessionSummary(pool, existing);
         return res.json({ ok: true, session: summary });
@@ -412,7 +509,7 @@ module.exports = function buildBillingRoutes(pool) {
       const storeId = await enforceStore(req, res);
       if (!storeId) return;
 
-      const session = await getActiveSession(storeId);
+      const session = await getActiveSession(pool, storeId);
       const summary = session ? await loadBillingSessionSummary(pool, session) : null;
       return res.json({ ok: true, session: summary });
     } catch (err) {
@@ -428,7 +525,7 @@ module.exports = function buildBillingRoutes(pool) {
       if (!storeId) return;
 
       await client.query("BEGIN");
-      const session = await getActiveSession(storeId);
+      const session = await getActiveSession(client, storeId);
       if (!session) {
         await client.query("ROLLBACK");
         return res.status(400).json({ ok: false, error: "No active session" });
@@ -457,7 +554,7 @@ module.exports = function buildBillingRoutes(pool) {
       if (!storeId) return;
 
       await client.query("BEGIN");
-      const session = await getActiveSession(storeId);
+      const session = await getActiveSession(client, storeId);
       if (!session) {
         await client.query("ROLLBACK");
         return res.status(400).json({ ok: false, error: "No active session" });
@@ -495,7 +592,7 @@ module.exports = function buildBillingRoutes(pool) {
       await client.query("BEGIN");
       await ensureCatalogTable(client);
 
-      const session = await getActiveSession(storeId);
+      const session = await getActiveSession(client, storeId);
       if (!session) {
         await client.query("ROLLBACK");
         return res.status(400).json({ ok: false, error: "No active session" });
@@ -582,8 +679,33 @@ module.exports = function buildBillingRoutes(pool) {
         `,
         [session.id, epc]
       );
+      const liveFeedRow = await mirrorBillingScanToLiveFeed(client, {
+        session,
+        store_id: storeId,
+        device_id: deviceId,
+        epc,
+        validation,
+        scan_row: scanRow.rows[0] || null,
+      });
 
       await client.query("COMMIT");
+
+      const broadcast = req.app?.locals?.broadcastEvent;
+      if (typeof broadcast === "function") {
+        broadcast("scan", {
+          id: liveFeedRow?.id || null,
+          tag: epc,
+          store_id: storeId,
+          device_id: deviceId,
+          ts: liveFeedRow?.ts || scanRow.rows[0]?.first_seen || new Date().toISOString(),
+          last_seen: liveFeedRow?.last_seen || scanRow.rows[0]?.last_seen || null,
+          first_seen: liveFeedRow?.first_seen || scanRow.rows[0]?.first_seen || null,
+          read_count: liveFeedRow?.read_count || scanRow.rows[0]?.read_count || 1,
+          processing_status: liveFeedRow?.processing_status || "CONFIRMED",
+          validation_status: validation.validation_status || null,
+          source: "billing/scan",
+        });
+      }
 
       return res.json({
         ok: true,
@@ -605,7 +727,7 @@ module.exports = function buildBillingRoutes(pool) {
       const storeId = await enforceStore(req, res);
       if (!storeId) return;
 
-      const session = await getActiveSession(storeId);
+      const session = await getActiveSession(pool, storeId);
       const scanData = await buildScanRows(pool, storeId, session);
       const summary = session ? await loadBillingSessionSummary(pool, session) : null;
 
@@ -665,7 +787,7 @@ module.exports = function buildBillingRoutes(pool) {
       const storeId = await enforceStore(req, res);
       if (!storeId) return;
 
-      const session = await getActiveSession(storeId);
+      const session = await getActiveSession(pool, storeId);
       if (!session) {
         return res.json({
           ok: true,

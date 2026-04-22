@@ -1,7 +1,7 @@
 // src/lib/api.js
+import API_BASE from "@/config/api";
 
-const BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || "http://localhost:3000/api/v1";
+const BASE_URL = API_BASE;
 const REQUEST_TIMEOUT_MS = Math.min(
   Math.max(Number(import.meta.env.VITE_API_TIMEOUT_MS || 20000), 2000),
   60000

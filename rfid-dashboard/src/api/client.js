@@ -1,5 +1,5 @@
 // src/api/client.js
-const API_BASE = import.meta.env.VITE_API_BASE_URL || "/api/v1";
+import API_BASE from "@/config/api";
 
 /* =========================
    TOKEN (zyro_jwt safe)
