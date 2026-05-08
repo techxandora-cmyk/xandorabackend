@@ -1,11 +1,11 @@
-# Xandora Demo
+# Xandora Retail Console
 
-Disposable POS + Inventory prototype for customer showcases.
+RFID billing, inventory intake, and laundry console for customer showcases.
 
 ## Quick Start
 
 ```powershell
-cd zyro-demo
+cd xandora-retail-console
 npm install
 npm start
 ```
@@ -16,8 +16,8 @@ Open:
 
 ## Touch-Screen Launch (Windows)
 
-- `launcher/Start-Zyro-Demo.bat`
-- `launcher/Stop-Zyro-Demo.bat`
+- `launcher/Start-Xandora-Retail-Console.bat`
+- `launcher/Stop-Xandora-Retail-Console.bat`
 
 ## Data Files
 
@@ -37,13 +37,13 @@ powershell -ExecutionPolicy Bypass -File .\scripts\apply-real-data.ps1 -Products
 Then restart with:
 
 ```powershell
-launcher\Stop-Zyro-Demo.bat
-launcher\Start-Zyro-Demo.bat
+launcher\Stop-Xandora-Retail-Console.bat
+launcher\Start-Xandora-Retail-Console.bat
 ```
 
 ## Notes
 
-- This demo is intentionally separate from production Xandora.
+- This console is intentionally separate from production Xandora.
 - Do not ship the real Xandora source for sales demos.
 - Unknown EPCs scanned via the demo API are auto-mapped to a random product and saved to `backend/data/epc_map.json`.
 - Reader integration endpoint: `POST /api/v1/scans/batch`

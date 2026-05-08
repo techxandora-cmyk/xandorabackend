@@ -21,5 +21,5 @@ if (-not $pidText) {
 $targetPid = [int]$pidText
 Stop-Process -Id $targetPid -Force -ErrorAction SilentlyContinue
 Remove-Item $pidFile -Force -ErrorAction SilentlyContinue
-Write-Host "Stopped Xandora Demo (PID $targetPid)."
+Write-Host "Stopped Xandora Retail Console (PID $targetPid)."
 exit 0

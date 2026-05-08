@@ -1,8 +1,8 @@
 {
-  "name": "zyro-demo",
+  "name": "xandora-retail-console",
   "version": "0.1.0",
   "private": true,
-  "description": "Disposable POS + Inventory demo for Zyro showcases",
+  "description": "Xandora Retail Console for RFID billing, inventory, and laundry showcases",
   "main": "backend/server.js",
   "scripts": {
     "start": "node backend/server.js",

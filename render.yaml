@@ -31,6 +31,21 @@ services:
       - key: DEVICE_API_KEY
         generateValue: true
 
+  - type: web
+    name: xandora-retail-console
+    runtime: node
+    region: oregon
+    plan: free
+    rootDir: xandora-retail-console
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DEMO_SIM_ENABLED
+        value: "1"
+
 databases:
   - name: xandora-db
     region: oregon

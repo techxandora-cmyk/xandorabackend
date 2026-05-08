@@ -1,11 +1,11 @@
-# Xandora Demo Operator Guide
+# Xandora Retail Console Operator Guide
 
 ## Purpose
 
-This is a disposable demo build for showcasing Xandora POS and Inventory behavior.
+This is a retail console build for showcasing Xandora POS, inventory, and laundry behavior.
 It is not the production Xandora stack.
 
-## What This Demo Includes
+## What This Console Includes
 
 - Live scan zone with auto-disappear when tags are no longer seen.
 - POS cart operations (add/remove/clear).
@@ -23,7 +23,7 @@ It is not the production Xandora stack.
 
 Double-click:
 
-`zyro-demo/launcher/Start-Zyro-Demo.bat`
+`xandora-retail-console/launcher/Start-Xandora-Retail-Console.bat`
 
 What happens:
 
@@ -31,25 +31,25 @@ What happens:
 2. Starts the local demo server.
 3. Opens browser in full-screen kiosk mode.
 
-## Stop Demo
+## Stop Console
 
 Double-click:
 
-`zyro-demo/launcher/Stop-Zyro-Demo.bat`
+`xandora-retail-console/launcher/Stop-Xandora-Retail-Console.bat`
 
 If startup fails, check:
 
-- `zyro-demo/.demo-server.out.log`
-- `zyro-demo/.demo-server.err.log`
+- `xandora-retail-console/.demo-server.out.log`
+- `xandora-retail-console/.demo-server.err.log`
 
 ## Replace Demo Data
 
 Edit these files:
 
-- `zyro-demo/backend/data/products.json`
-- `zyro-demo/backend/data/epc_map.json`
+- `xandora-retail-console/backend/data/products.json`
+- `xandora-retail-console/backend/data/epc_map.json`
 
-Then restart demo with `Start-Zyro-Demo.bat`.
+Then restart the console with `Start-Xandora-Retail-Console.bat`.
 
 Or run:
 
@@ -61,8 +61,8 @@ powershell -ExecutionPolicy Bypass -File .\scripts\apply-real-data.ps1 -Products
 
 ## Close Button
 
-- The top-right `Close Xandora` button requests clean shutdown from inside the UI.
-- You can also use `Stop-Zyro-Demo.bat` externally.
+- The top-right `Close` button requests clean shutdown from inside the UI.
+- You can also use `Stop-Xandora-Retail-Console.bat` externally.
 
 ## Manual API Checks
 

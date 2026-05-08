@@ -1,4 +1,4 @@
-﻿[
+[
   {
     "sku": "SHIRT-001",
     "name": "Oxford Shirt Blue",
@@ -21,7 +21,9 @@
     "category": "Pants",
     "price": 7490,
     "currency": "LKR",
-    "stock": 16
+    "stock": 16,
+    "color": "",
+    "size": ""
   },
   {
     "sku": "PANTS-002",
@@ -45,7 +47,9 @@
     "category": "Socks",
     "price": 1390,
     "currency": "LKR",
-    "stock": 48
+    "stock": 48,
+    "color": "",
+    "size": ""
   },
   {
     "sku": "TSHIRT-001",
@@ -64,4 +68,3 @@
     "stock": 42
   }
 ]
-

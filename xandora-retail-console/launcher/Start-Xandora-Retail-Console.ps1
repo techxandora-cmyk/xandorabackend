@@ -7,7 +7,7 @@ Set-Location $root
 $pidFile = Join-Path $root ".demo-server.pid"
 $outLog = Join-Path $root ".demo-server.out.log"
 $errLog = Join-Path $root ".demo-server.err.log"
-$skipBrowser = $env:ZYRO_DEMO_SKIP_BROWSER -eq "1"
+$skipBrowser = $env:XANDORA_RETAIL_CONSOLE_SKIP_BROWSER -eq "1"
 
 function Test-Health {
   try {
@@ -22,7 +22,7 @@ function Open-Browser {
   if ($skipBrowser) {
     return
   }
-  & (Join-Path $PSScriptRoot "Open-Zyro-Demo-Edge.bat")
+  & (Join-Path $PSScriptRoot "Open-Xandora-Retail-Console-Edge.bat")
 }
 
 if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
@@ -35,7 +35,7 @@ if (Test-Path $pidFile) {
   if ($existingPid) {
     $existingProc = Get-Process -Id ([int]$existingPid) -ErrorAction SilentlyContinue
     if ($existingProc) {
-      Write-Host "Xandora Demo is already running on PID $existingPid."
+      Write-Host "Xandora Retail Console is already running on PID $existingPid."
       Open-Browser
       exit 0
     }
@@ -45,7 +45,7 @@ if (Test-Path $pidFile) {
 
 $moduleCheck = & node -e "require.resolve('express'); require.resolve('cors');"
 if ($LASTEXITCODE -ne 0) {
-  Write-Host "Installing demo dependencies..."
+  Write-Host "Installing console dependencies..."
   & npm install
   if ($LASTEXITCODE -ne 0) {
     Write-Host "Failed to install dependencies." -ForegroundColor Red
@@ -64,7 +64,7 @@ $proc = Start-Process node `
   -PassThru
 
 Set-Content -Path $pidFile -Value $proc.Id -Encoding ascii
-Write-Host "Xandora Demo started with PID $($proc.Id)."
+Write-Host "Xandora Retail Console started with PID $($proc.Id)."
 
 $healthy = $false
 for ($i = 0; $i -lt 20; $i += 1) {
@@ -76,7 +76,7 @@ for ($i = 0; $i -lt 20; $i += 1) {
 }
 
 if (-not $healthy) {
-  Write-Host "Demo failed health check on http://127.0.0.1:4300/api/health" -ForegroundColor Red
+  Write-Host "Console failed health check on http://127.0.0.1:4300/api/health" -ForegroundColor Red
   $runningProc = Get-Process -Id $proc.Id -ErrorAction SilentlyContinue
   if ($runningProc) {
     Write-Host "Server process is still running, but API did not respond."
@@ -97,6 +97,6 @@ if (-not $healthy) {
   exit 1
 }
 
-Write-Host "Demo is ready."
+Write-Host "Xandora Retail Console is ready."
 Open-Browser
 exit 0

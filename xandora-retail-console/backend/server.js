@@ -5,6 +5,7 @@ const { createDemoDataStore } = require("./services/dataStore");
 const { ZoneTracker } = require("./services/zoneTracker");
 const { CartStore } = require("./services/cartStore");
 const { StocktakeStore } = require("./services/stocktakeStore");
+const { LaundryStore } = require("./services/laundryStore");
 
 const PORT = Number(process.env.PORT || 4300);
 const HOST = process.env.HOST || "0.0.0.0";
@@ -21,6 +22,7 @@ const dataStore = createDemoDataStore();
 const zoneTracker = new ZoneTracker({ inZoneTimeoutMs: IN_ZONE_TIMEOUT_MS });
 const cartStore = new CartStore();
 const stocktakeStore = new StocktakeStore();
+const laundryStore = new LaundryStore();
 const EXPECTED_SCAN_KEY = String(
   process.env.DEMO_SCAN_KEY || process.env.SCAN_API_KEY || ""
 ).trim();
@@ -66,7 +68,7 @@ function getScanKey(req) {
   return String(
     req.headers["x-scan-key"] ||
       req.headers["x-api-key"] ||
-      req.headers["x-zyro-scan-key"] ||
+      req.headers["x-xandora-scan-key"] ||
       ""
   ).trim();
 }
@@ -122,6 +124,13 @@ function mapBatchResponseRows(rows) {
   }));
 }
 
+function rememberKnownEpc(epc) {
+  const key = normalizeEpc(epc);
+  if (key && !knownEpcs.includes(key)) {
+    knownEpcs.push(key);
+  }
+}
+
 function simulatorTick() {
   if (!knownEpcs.length) return;
 
@@ -133,7 +142,43 @@ function simulatorTick() {
     const epc = randomPick(knownEpcs);
     const item = dataStore.resolveByEpc(epc);
     if (!item) continue;
-    zoneTracker.touch(item, Date.now());
+
+    const modeRoll = Math.random();
+    if (modeRoll < 0.62) {
+      zoneTracker.touch(item, Date.now());
+      continue;
+    }
+
+    if (modeRoll < 0.84) {
+      const row = stocktakeStore.touch(item, {
+        device_id: "DEMO_HANDHELD",
+        store_id: "STORE_DEMO",
+      });
+      broadcast({
+        type: "inventory.stocktake_scan",
+        epc,
+        sku: row.sku,
+        device_id: row.deviceId,
+        store_id: row.storeId,
+        scans: row.scans,
+        at: Date.now(),
+      });
+      continue;
+    }
+
+    const status = randomPick(["Received", "Washing", "Ready", "Dispatched"]);
+    const row = laundryStore.touch(item, {
+      status,
+      device_id: "DEMO_LAUNDRY_STATION",
+      store_id: "STORE_DEMO",
+    });
+    broadcast({
+      type: "laundry.scan",
+      epc,
+      sku: row.sku,
+      status: row.status,
+      at: Date.now(),
+    });
   }
 }
 
@@ -160,28 +205,44 @@ function stopSimulator() {
   return true;
 }
 
+function clearWorkingState() {
+  for (const item of zoneTracker.list()) {
+    zoneTracker.remove(item.epc, "clear_working_state", Date.now());
+  }
+  cartStore.clear();
+  stocktakeStore.clear();
+  laundryStore.clear();
+  broadcast({
+    type: "demo.working_state_cleared",
+    at: Date.now(),
+  });
+}
+
 if (SIM_ENABLED_DEFAULT) {
   startSimulator();
 }
 
 app.get("/api/health", (_req, res) => {
   const stocktakeSummary = stocktakeStore.summary();
+  const laundrySummary = laundryStore.summary();
   res.json({
     ok: true,
-    app: "zyro-demo",
+    app: "xandora-retail-console",
     uptimeSec: Math.round(process.uptime()),
     liveInZoneCount: zoneTracker.list().length,
     cartCount: cartStore.snapshot().count,
     simulatorRunning: demoState.simulatorRunning,
     stocktakeUniqueEpcs: stocktakeSummary.uniqueEpcs,
     stocktakeTotalScans: stocktakeSummary.totalScanEvents,
+    laundryUniqueEpcs: laundrySummary.uniqueEpcs,
   });
 });
 
 app.get("/api/demo/status", (_req, res) => {
   const stocktakeSummary = stocktakeStore.summary();
+  const laundrySummary = laundryStore.summary();
   res.json({
-    app: "zyro-demo",
+    app: "xandora-retail-console",
     simulatorRunning: demoState.simulatorRunning,
     inZoneTimeoutMs: IN_ZONE_TIMEOUT_MS,
     cleanupIntervalMs: CLEANUP_INTERVAL_MS,
@@ -190,6 +251,7 @@ app.get("/api/demo/status", (_req, res) => {
     knownEpcs: knownEpcs.length,
     stocktakeUniqueEpcs: stocktakeSummary.uniqueEpcs,
     stocktakeTotalScans: stocktakeSummary.totalScanEvents,
+    laundryUniqueEpcs: laundrySummary.uniqueEpcs,
   });
 });
 
@@ -204,11 +266,18 @@ app.post("/api/demo/simulator/start", (_req, res) => {
 
 app.post("/api/demo/simulator/stop", (_req, res) => {
   const stopped = stopSimulator();
+  clearWorkingState();
   res.json({
     ok: true,
     simulatorRunning: demoState.simulatorRunning,
     changed: stopped,
+    cleared: true,
   });
+});
+
+app.post("/api/demo/clear-working-state", (_req, res) => {
+  clearWorkingState();
+  res.json({ ok: true, cleared: true });
 });
 
 app.post("/api/demo/shutdown", (_req, res) => {
@@ -251,7 +320,7 @@ app.post("/api/live/scan", (req, res) => {
   }
 
   if (!knownBefore) {
-    knownEpcs.push(epc);
+    rememberKnownEpc(epc);
     broadcast({
       type: "live.auto_assigned",
       epc,
@@ -297,7 +366,7 @@ function ingestScanBatch(req, res, { forceHandheld = false } = {}) {
     if (!resolved?.item) continue;
 
     if (!knownBefore) {
-      knownEpcs.push(epc);
+      rememberKnownEpc(epc);
       autoAssignedCount += 1;
       broadcast({
         type: "live.auto_assigned",
@@ -386,6 +455,130 @@ app.post("/api/inventory/stocktake/scan", (req, res) =>
   )
 );
 
+app.get("/api/assignments", (_req, res) => {
+  const includeSeed = demoState.simulatorRunning;
+  const items = dataStore.listAssignments({ includeSeed });
+  res.json({
+    items,
+    count: items.length,
+    include_seed_demo_items: includeSeed,
+  });
+});
+
+app.get("/api/assignments/recent-epcs", (_req, res) => {
+  const liveRows = zoneTracker.list().map((item) => ({
+    epc: item.epc,
+    source: "Bin live zone",
+    seenAt: item.lastSeenAt,
+    ageSec: item.ageSec,
+    assigned: dataStore.isAssigned(item.epc),
+    item: dataStore.resolveByEpc(item.epc),
+  }));
+
+  const stocktakeRows = stocktakeStore.recent(40).map((item) => ({
+    epc: item.epc,
+    source: "Inventory intake",
+    seenAt: item.at,
+    assigned: dataStore.isAssigned(item.epc),
+    item: dataStore.resolveByEpc(item.epc),
+  }));
+
+  const laundryRows = laundryStore.recent(40).map((item) => ({
+    epc: item.epc,
+    source: "Laundry",
+    seenAt: item.at,
+    assigned: dataStore.isAssigned(item.epc),
+    item: dataStore.resolveByEpc(item.epc),
+  }));
+
+  const byEpc = new Map();
+  for (const row of [...liveRows, ...stocktakeRows, ...laundryRows]) {
+    const key = normalizeEpc(row.epc);
+    if (!key) continue;
+    const prev = byEpc.get(key);
+    if (!prev || Number(row.seenAt || 0) > Number(prev.seenAt || 0)) {
+      byEpc.set(key, { ...row, epc: key });
+    }
+  }
+
+  const items = [...byEpc.values()]
+    .sort((a, b) => Number(b.seenAt || 0) - Number(a.seenAt || 0))
+    .slice(0, 30)
+    .map((row) => ({
+      ...row,
+      seenAtIso: row.seenAt ? new Date(row.seenAt).toISOString() : null,
+    }));
+
+  res.json({
+    items,
+    count: items.length,
+  });
+});
+
+app.post("/api/assignments", (req, res) => {
+  const assigned = dataStore.assignEpc(req.body || {});
+  if (!assigned) {
+    return res.status(400).json({ ok: false, error: "epc, sku, and product name are required" });
+  }
+
+  rememberKnownEpc(assigned.epc);
+  broadcast({
+    type: "assignment.saved",
+    epc: assigned.epc,
+    sku: assigned.sku,
+    at: Date.now(),
+  });
+
+  return res.json({ ok: true, item: assigned });
+});
+
+app.get("/api/laundry/items", (req, res) => {
+  const limit = Math.min(Math.max(Number(req.query.limit || 80), 1), 300);
+  res.json({
+    items: laundryStore.list().slice(0, limit),
+    recent: laundryStore.recent(limit),
+    summary: laundryStore.summary(),
+  });
+});
+
+app.post("/api/laundry/scan", (req, res) => {
+  const epc = normalizeEpc(req.body?.epc);
+  if (!epc) {
+    return res.status(400).json({ ok: false, error: "epc is required" });
+  }
+
+  const resolved = dataStore.resolveOrAssignByEpc(epc, { persist: true });
+  if (!resolved?.item) {
+    return res.status(500).json({ ok: false, error: "Unable to map EPC to a laundry item" });
+  }
+
+  rememberKnownEpc(epc);
+  const row = laundryStore.touch(resolved.item, {
+    status: req.body?.status || "Received",
+    device_id: req.body?.device_id || "LAUNDRY_STATION",
+    store_id: req.body?.store_id || "STORE_DEMO",
+  });
+
+  broadcast({
+    type: "laundry.scan",
+    epc,
+    sku: row.sku,
+    status: row.status,
+    at: Date.now(),
+  });
+
+  return res.json({ ok: true, item: row, autoAssigned: resolved.autoAssigned });
+});
+
+app.post("/api/laundry/clear", (_req, res) => {
+  const summary = laundryStore.clear();
+  broadcast({
+    type: "laundry.cleared",
+    at: Date.now(),
+  });
+  res.json({ ok: true, summary });
+});
+
 app.post("/api/live/remove", (req, res) => {
   const epc = String(req.body?.epc || "").trim();
   if (!epc) {
@@ -409,7 +602,10 @@ app.get("/api/catalog/products", (_req, res) => {
 app.get("/api/inventory/summary", (_req, res) => {
   const inZoneBySku = zoneTracker.countBySku();
   const stocktakeBySku = stocktakeStore.countBySku();
-  const items = dataStore.products.map((product) => {
+  const products = dataStore.listProducts({
+    includeSeed: demoState.simulatorRunning,
+  });
+  const items = products.map((product) => {
     const inZone = Number(inZoneBySku[product.sku] || 0);
     const stocktakeScanned = Number(stocktakeBySku[product.sku] || 0);
     const stock = Number(product.stock || 0);
@@ -430,6 +626,7 @@ app.get("/api/inventory/summary", (_req, res) => {
     items,
     count: items.length,
     stocktake: stocktakeStore.summary(),
+    include_seed_demo_items: demoState.simulatorRunning,
   });
 });
 
@@ -494,5 +691,5 @@ app.get(/.*/, (_req, res) => {
 
 app.listen(PORT, HOST, () => {
   // eslint-disable-next-line no-console
-  console.log(`[zyro-demo] running at http://${HOST === "0.0.0.0" ? "127.0.0.1" : HOST}:${PORT}`);
+  console.log(`[xandora-retail-console] running at http://${HOST === "0.0.0.0" ? "127.0.0.1" : HOST}:${PORT}`);
 });

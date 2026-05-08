@@ -1,0 +1,379 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Xandora Retail Console</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div class="brand-wrap">
+          <div class="brand-mark">
+            <img src="./assets/xandora-icon.svg" alt="Xandora logo" />
+          </div>
+          <div class="brand-copy">
+            <h1>Xandora Retail Console</h1>
+            <p>RFID billing, inventory intake, and laundry operations</p>
+          </div>
+        </div>
+        <div class="status-wrap">
+          <span id="api-status" class="pill danger">API Offline</span>
+          <span id="sim-status" class="pill muted">Simulator</span>
+          <button id="sim-toggle-btn" class="btn btn-outline" type="button">Start Sim</button>
+          <button id="close-demo-btn" class="btn btn-danger" type="button">Close</button>
+        </div>
+      </header>
+
+      <nav class="tabs">
+        <button id="tab-billing" class="tab active" type="button">Billing</button>
+        <button id="tab-inventory" class="tab" type="button">Inventory Intake</button>
+        <button id="tab-laundry" class="tab" type="button">Laundry</button>
+        <button id="tab-assign" class="tab" type="button">Assign Items</button>
+      </nav>
+
+      <section id="billing-view" class="view active">
+        <div class="card">
+          <div class="card-head">
+            <h2>Bin Live Zone</h2>
+            <div class="inline-actions">
+              <input id="manual-epc" class="text-input" placeholder="Manual EPC" />
+              <button id="manual-scan-btn" class="btn" type="button">Scan to Bin</button>
+              <button id="refresh-btn" class="btn btn-outline" type="button">Refresh</button>
+            </div>
+          </div>
+          <p class="card-subtitle">
+            Drop tagged items in the bin. They appear here first, then add selected items to bill.
+          </p>
+          <div class="table-wrap table-wrap-fixed" id="live-zone-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>EPC</th>
+                  <th>Product</th>
+                  <th>Category</th>
+                  <th>Bin</th>
+                  <th>Price</th>
+                  <th>Seen</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody id="in-zone-body"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head">
+            <h2>POS Cart</h2>
+            <div class="inline-actions">
+              <button id="checkout-btn" class="btn" type="button">Checkout / Payment</button>
+              <button id="clear-cart-btn" class="btn btn-outline" type="button">Clear Cart</button>
+            </div>
+          </div>
+          <div class="metrics-row">
+            <div class="metric">
+              <span>Items</span>
+              <strong id="metric-cart-count">0</strong>
+            </div>
+            <div class="metric">
+              <span>Total</span>
+              <strong id="metric-cart-total">LKR 0.00</strong>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>EPC</th>
+                  <th>Product</th>
+                  <th>Category</th>
+                  <th>Bin</th>
+                  <th>Price</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody id="cart-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section id="inventory-view" class="view">
+        <div class="card">
+          <div class="card-head">
+            <h2>Inventory Intake</h2>
+            <div class="inline-actions">
+              <button id="manual-stocktake-btn" class="btn" type="button">Scan to Inventory</button>
+              <button id="clear-stocktake-btn" class="btn btn-outline" type="button">
+                Clear Intake
+              </button>
+            </div>
+          </div>
+          <p class="card-subtitle">
+            Use the handheld or manual EPC field to prove incoming stock and bin intake.
+          </p>
+          <div class="metrics-row">
+            <div class="metric">
+              <span>Unique EPCs</span>
+              <strong id="metric-stocktake-unique">0</strong>
+            </div>
+            <div class="metric">
+              <span>Total Intake Scans</span>
+              <strong id="metric-stocktake-total">0</strong>
+            </div>
+          </div>
+          <div class="table-wrap table-wrap-fixed inventory-stocktake-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Time</th>
+                  <th>EPC</th>
+                  <th>Product</th>
+                  <th>Category</th>
+                  <th>Bin</th>
+                  <th>Device</th>
+                  <th>Scans</th>
+                </tr>
+              </thead>
+              <tbody id="stocktake-body"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head">
+            <h2>Stock Summary</h2>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>SKU</th>
+                  <th>Product</th>
+                  <th>Category</th>
+                  <th>Unit Price</th>
+                  <th>Stock</th>
+                  <th>In Bin</th>
+                  <th>Intake</th>
+                  <th>Available</th>
+                </tr>
+              </thead>
+              <tbody id="inventory-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section id="laundry-view" class="view">
+        <div class="card">
+          <div class="card-head">
+            <h2>Laundry Intake</h2>
+            <div class="inline-actions">
+              <label class="toolbar-label">
+                Apply Status
+                <select id="laundry-status" class="text-input compact-input">
+                  <option>Received</option>
+                  <option>Washing</option>
+                  <option>Ready</option>
+                  <option>Dispatched</option>
+                </select>
+              </label>
+              <label class="toolbar-label">
+                Filter
+                <select id="laundry-filter" class="text-input compact-input">
+                  <option>All</option>
+                  <option>Received</option>
+                  <option>Washing</option>
+                  <option>Ready</option>
+                  <option>Dispatched</option>
+                </select>
+              </label>
+              <button id="manual-laundry-btn" class="btn" type="button">Apply to Laundry</button>
+              <button id="clear-laundry-btn" class="btn btn-outline" type="button">Clear Laundry</button>
+            </div>
+          </div>
+          <p class="card-subtitle">
+            Reuse the same assigned tags to show garment processing. Tap a row to correct or reapply status.
+          </p>
+          <div class="metrics-row">
+            <div class="metric">
+              <span>Laundry EPCs</span>
+              <strong id="metric-laundry-unique">0</strong>
+            </div>
+            <div class="metric">
+              <span>Total Laundry Scans</span>
+              <strong id="metric-laundry-total">0</strong>
+            </div>
+          </div>
+          <div class="table-wrap table-wrap-fixed inventory-stocktake-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Last Seen</th>
+                  <th>EPC</th>
+                  <th>Product</th>
+                  <th>Bin</th>
+                  <th>Status</th>
+                  <th>Scans</th>
+                </tr>
+              </thead>
+              <tbody id="laundry-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section id="assign-view" class="view">
+        <div class="card">
+          <div class="card-head">
+            <h2>Recent EPCs</h2>
+            <button id="recent-epcs-refresh-btn" class="btn btn-outline" type="button">Refresh EPCs</button>
+          </div>
+          <p class="card-subtitle">
+            Scan an item in the bin or from the handheld, then tap the EPC here to assign product details.
+          </p>
+          <div class="table-wrap recent-epcs-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>EPC</th>
+                  <th>Source</th>
+                  <th>Status</th>
+                  <th>Current Item</th>
+                  <th>Seen</th>
+                </tr>
+              </thead>
+              <tbody id="recent-epcs-body"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head">
+            <h2>Assign Tag Details</h2>
+            <button id="assignment-refresh-btn" class="btn btn-outline" type="button">Refresh</button>
+          </div>
+          <p class="card-subtitle">
+            Register prepared sample shirts, socks, bins, prices, and laundry labels before the live demo.
+          </p>
+          <form id="assignment-form" class="assignment-grid">
+            <label>
+              EPC
+              <input id="assign-epc" class="text-input" required placeholder="Scan or paste EPC" />
+            </label>
+            <label>
+              SKU
+              <input id="assign-sku" class="text-input" required placeholder="SHIRT-101" />
+            </label>
+            <label>
+              Product
+              <input id="assign-name" class="text-input" required placeholder="Blue Oxford Shirt" />
+            </label>
+            <label>
+              Category
+              <input id="assign-category" class="text-input" placeholder="Shirts" />
+            </label>
+            <label>
+              Bin
+              <input id="assign-bin" class="text-input" placeholder="Bin A1" />
+            </label>
+            <label>
+              Size
+              <input id="assign-size" class="text-input" placeholder="M" />
+            </label>
+            <label>
+              Color
+              <input id="assign-color" class="text-input" placeholder="Blue" />
+            </label>
+            <label>
+              Price
+              <input id="assign-price" class="text-input" type="number" min="0" step="1" placeholder="5490" />
+            </label>
+            <label>
+              Stock
+              <input id="assign-stock" class="text-input" type="number" min="0" step="1" placeholder="1" />
+            </label>
+            <label>
+              Laundry Status
+              <select id="assign-laundry-status" class="text-input">
+                <option>Ready</option>
+                <option>Received</option>
+                <option>Washing</option>
+                <option>Dispatched</option>
+              </select>
+            </label>
+            <label class="wide-field">
+              Notes
+              <input id="assign-notes" class="text-input" placeholder="Prepared sample item" />
+            </label>
+            <button class="btn assign-save-btn" type="submit">Save Assignment</button>
+          </form>
+        </div>
+
+        <div class="card">
+          <div class="card-head">
+            <h2>Last Assigned</h2>
+          </div>
+          <div id="recent-assigned-list" class="recent-assigned-list"></div>
+        </div>
+
+        <div class="card">
+          <div class="card-head">
+            <h2>Assigned Sample Items</h2>
+          </div>
+          <div class="table-wrap table-wrap-fixed assignment-table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>EPC</th>
+                  <th>SKU</th>
+                  <th>Product</th>
+                  <th>Bin</th>
+                  <th>Size</th>
+                  <th>Color</th>
+                  <th>Price</th>
+                </tr>
+              </thead>
+              <tbody id="assignments-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <h2>Event Log</h2>
+        </div>
+        <pre id="event-log" class="event-log"></pre>
+      </section>
+    </div>
+
+    <div id="checkout-modal" class="modal-backdrop" hidden>
+      <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="checkout-modal-title">
+        <div class="modal-head">
+          <h2 id="checkout-modal-title">Payment Handoff</h2>
+          <button id="checkout-modal-close" class="icon-btn" type="button" aria-label="Close payment handoff">×</button>
+        </div>
+        <div class="modal-body">
+          <div class="payment-mark">X</div>
+          <p class="modal-copy">
+            Cart is ready to hand off to the customer default POS payment gateway.
+          </p>
+          <div class="payment-summary">
+            <span>Items</span>
+            <strong id="checkout-modal-count">0</strong>
+            <span>Total</span>
+            <strong id="checkout-modal-total">LKR 0.00</strong>
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button id="checkout-modal-done" class="btn" type="button">Return to Billing</button>
+        </div>
+      </div>
+    </div>
+
+    <script src="./app.js"></script>
+  </body>
+</html>
