@@ -20,11 +20,43 @@
         </div>
         <div class="status-wrap">
           <span id="api-status" class="pill danger">API Offline</span>
-          <span id="sim-status" class="pill muted">Simulator</span>
-          <button id="sim-toggle-btn" class="btn btn-outline" type="button">Start Sim</button>
+          <span id="bridge-status" class="pill muted" hidden>Live Reader</span>
+          <span id="sim-status" class="pill muted">Demo Feed</span>
+          <button id="sim-toggle-btn" class="btn btn-outline" type="button">Start Demo Feed</button>
           <button id="close-demo-btn" class="btn btn-danger" type="button">Close</button>
         </div>
       </header>
+
+      <div class="intro-strip">
+        <div class="intro-card">
+          <div class="intro-card-num">01</div>
+          <div class="intro-card-body">
+            <strong>Instant Checkout</strong>
+            <p>Walk tagged items into the checkout zone — they appear on screen the moment the reader detects them. No barcode scanning, no manual entry. Add to bill and done.</p>
+          </div>
+        </div>
+        <div class="intro-card">
+          <div class="intro-card-num">02</div>
+          <div class="intro-card-body">
+            <strong>Hands-Free Stocktake</strong>
+            <p>Staff walk the floor with a handheld reader. Every tagged item is counted and logged automatically. A full stocktake in minutes — not hours of manual counting.</p>
+          </div>
+        </div>
+        <div class="intro-card">
+          <div class="intro-card-num">03</div>
+          <div class="intro-card-body">
+            <strong>Garment Lifecycle Tracking</strong>
+            <p>Each item carries its tag through the entire laundry cycle. One scan updates its status — Received, Washing, Ready, Dispatched — with a full per-item history.</p>
+          </div>
+        </div>
+        <div class="intro-card">
+          <div class="intro-card-num">04</div>
+          <div class="intro-card-body">
+            <strong>One Tag, Every System</strong>
+            <p>The same RFID tag drives billing, stock counts, and laundry tracking. Assign a tag once to a product — it then works everywhere across the entire operation.</p>
+          </div>
+        </div>
+      </div>
 
       <nav class="tabs">
         <button id="tab-billing" class="tab active" type="button">Billing</button>
@@ -44,7 +76,7 @@
             </div>
           </div>
           <p class="card-subtitle">
-            Drop tagged items in the bin. They appear here first, then add selected items to bill.
+            Tagged items are detected the instant they enter the RFID zone — no scanning needed. Select any item and add it to the bill. This is what replaces the barcode gun at your checkout counter.
           </p>
           <div class="table-wrap table-wrap-fixed" id="live-zone-wrap">
             <table>
@@ -112,7 +144,7 @@
             </div>
           </div>
           <p class="card-subtitle">
-            Use the handheld or manual EPC field to prove incoming stock and bin intake.
+            Staff walk the store or stock room with a handheld reader. Every tagged item is counted and logged here in real time — no clipboards, no manual tallying. The system catches discrepancies between expected and actual stock automatically.
           </p>
           <div class="metrics-row">
             <div class="metric">
@@ -195,7 +227,7 @@
             </div>
           </div>
           <p class="card-subtitle">
-            Reuse the same assigned tags to show garment processing. Tap a row to correct or reapply status.
+            Each garment tag follows the item through its entire laundry cycle. A single scan at any station — intake, washing, or dispatch — updates the status here instantly. Tap any row to correct or move an item to a new stage.
           </p>
           <div class="metrics-row">
             <div class="metric">
@@ -232,7 +264,7 @@
             <button id="recent-epcs-refresh-btn" class="btn btn-outline" type="button">Refresh EPCs</button>
           </div>
           <p class="card-subtitle">
-            Scan an item in the bin or from the handheld, then tap the EPC here to assign product details.
+            This is the setup step — done once before going live. Scan a physical tag, then link it to a product name, SKU, price, and bin. After that, the system recognises that tag everywhere: billing, stock counts, and laundry tracking.
           </p>
           <div class="table-wrap recent-epcs-wrap">
             <table>
@@ -256,7 +288,7 @@
             <button id="assignment-refresh-btn" class="btn btn-outline" type="button">Refresh</button>
           </div>
           <p class="card-subtitle">
-            Register prepared sample shirts, socks, bins, prices, and laundry labels before the live demo.
+            Fill in the product details for each physical tag below. Once saved, that tag is fully recognised across billing, inventory, and laundry — no re-entry needed.
           </p>
           <form id="assignment-form" class="assignment-grid">
             <label>

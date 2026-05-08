@@ -6,13 +6,20 @@ const { ZoneTracker } = require("./services/zoneTracker");
 const { CartStore } = require("./services/cartStore");
 const { StocktakeStore } = require("./services/stocktakeStore");
 const { LaundryStore } = require("./services/laundryStore");
+const { LiveBridge } = require("./services/liveBridge");
 
 const PORT = Number(process.env.PORT || 4300);
 const HOST = process.env.HOST || "0.0.0.0";
 const IN_ZONE_TIMEOUT_MS = Number(process.env.DEMO_IN_ZONE_TIMEOUT_MS || 4000);
 const CLEANUP_INTERVAL_MS = Number(process.env.DEMO_CLEANUP_INTERVAL_MS || 1000);
 const SIM_INTERVAL_MS = Number(process.env.DEMO_SIM_INTERVAL_MS || 1400);
-const SIM_ENABLED_DEFAULT = process.env.DEMO_SIM_ENABLED !== "0";
+const MAIN_API_URL = String(process.env.MAIN_API_URL || "").trim();
+
+// When a live reader bridge is configured, don't auto-start the simulator
+// unless DEMO_SIM_ENABLED is explicitly set to "1"
+const SIM_ENABLED_DEFAULT = MAIN_API_URL
+  ? process.env.DEMO_SIM_ENABLED === "1"
+  : process.env.DEMO_SIM_ENABLED !== "0";
 
 const app = express();
 app.use(cors());
@@ -222,9 +229,22 @@ if (SIM_ENABLED_DEFAULT) {
   startSimulator();
 }
 
+const liveBridge = new LiveBridge({
+  mainApiUrl: MAIN_API_URL,
+  dataStore,
+  zoneTracker,
+  broadcast,
+});
+
+if (MAIN_API_URL) {
+  liveBridge.start();
+  console.log("[xandora-retail-console] Live bridge connecting to", MAIN_API_URL);
+}
+
 app.get("/api/health", (_req, res) => {
   const stocktakeSummary = stocktakeStore.summary();
   const laundrySummary = laundryStore.summary();
+  const bridge = liveBridge.status();
   res.json({
     ok: true,
     app: "xandora-retail-console",
@@ -235,7 +255,12 @@ app.get("/api/health", (_req, res) => {
     stocktakeUniqueEpcs: stocktakeSummary.uniqueEpcs,
     stocktakeTotalScans: stocktakeSummary.totalScanEvents,
     laundryUniqueEpcs: laundrySummary.uniqueEpcs,
+    bridge,
   });
+});
+
+app.get("/api/bridge/status", (_req, res) => {
+  res.json(liveBridge.status());
 });
 
 app.get("/api/demo/status", (_req, res) => {
@@ -244,6 +269,7 @@ app.get("/api/demo/status", (_req, res) => {
   res.json({
     app: "xandora-retail-console",
     simulatorRunning: demoState.simulatorRunning,
+    bridge: liveBridge.status(),
     inZoneTimeoutMs: IN_ZONE_TIMEOUT_MS,
     cleanupIntervalMs: CLEANUP_INTERVAL_MS,
     simulatorIntervalMs: SIM_INTERVAL_MS,

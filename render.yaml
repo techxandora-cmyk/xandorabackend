@@ -44,7 +44,9 @@ services:
       - key: NODE_ENV
         value: production
       - key: DEMO_SIM_ENABLED
-        value: "1"
+        value: "0"
+      - key: MAIN_API_URL
+        value: https://xandora-api.onrender.com
 
 databases:
   - name: xandora-db

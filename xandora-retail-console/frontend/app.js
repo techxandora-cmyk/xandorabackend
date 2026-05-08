@@ -11,6 +11,7 @@
     assignments: [],
     recentEpcs: [],
     simulatorRunning: false,
+    bridgeConnected: false,
     logLines: [],
     events: null,
     liveRefreshTimer: null,
@@ -18,6 +19,7 @@
 
   const refs = {
     apiStatus: $("api-status"),
+    bridgeStatus: $("bridge-status"),
     simStatus: $("sim-status"),
     simToggleBtn: $("sim-toggle-btn"),
     tabs: {
@@ -108,6 +110,13 @@
   function setApiOnline(isOnline) {
     refs.apiStatus.textContent = isOnline ? "API Online" : "API Offline";
     refs.apiStatus.className = `pill ${isOnline ? "ok" : "danger"}`;
+  }
+
+  function setBridgeBadge(isConnected) {
+    state.bridgeConnected = !!isConnected;
+    refs.bridgeStatus.hidden = false;
+    refs.bridgeStatus.textContent = isConnected ? "Live Reader" : "Reader Offline";
+    refs.bridgeStatus.className = `pill ${isConnected ? "ok" : "danger"}`;
   }
 
   function setSimulatorBadge(isRunning) {
@@ -361,6 +370,9 @@
       const [health, status] = await Promise.all([apiGet("/api/health"), apiGet("/api/demo/status")]);
       setApiOnline(Boolean(health.ok));
       setSimulatorBadge(Boolean(status.simulatorRunning));
+      if (status.bridge?.configured) {
+        setBridgeBadge(Boolean(status.bridge.connected));
+      }
     } catch (_err) {
       setApiOnline(false);
       setSimulatorBadge(false);
@@ -458,6 +470,14 @@
         pushLog(type);
         if (type === "demo.simulator.started") setSimulatorBadge(true);
         if (type === "demo.simulator.stopped") setSimulatorBadge(false);
+        if (type === "bridge.connected") {
+          setBridgeBadge(true);
+          pushLog("Live reader connected");
+        }
+        if (type === "bridge.disconnected") {
+          setBridgeBadge(false);
+          pushLog("Live reader disconnected, reconnecting...");
+        }
         if (
           type.startsWith("live.") ||
           type.startsWith("inventory.") ||
