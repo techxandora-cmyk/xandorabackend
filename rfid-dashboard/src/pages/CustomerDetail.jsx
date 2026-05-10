@@ -21,9 +21,10 @@ export default function CustomerDetail() {
   const [loadingStores, setLoadingStores] = useState(false);
   const [error, setError] = useState("");
 
-  // readers per store: keyed by store_id
+  // readers + handheld devices per store: keyed by store_id
   const [expandedStore, setExpandedStore] = useState(null);
   const [storeReaders, setStoreReaders] = useState({});
+  const [storeDevices, setStoreDevices] = useState({});
   const [loadingReaders, setLoadingReaders] = useState(null);
   const [readerError, setReaderError] = useState({});
 
@@ -59,6 +60,7 @@ export default function CustomerDetail() {
     // reset expanded readers when switching company
     setExpandedStore(null);
     setStoreReaders({});
+    setStoreDevices({});
     setReaderError({});
   }
 
@@ -114,13 +116,21 @@ export default function CustomerDetail() {
     setLoadingReaders(key);
     setReaderError((p) => ({ ...p, [key]: "" }));
     try {
-      const res = await apiGet(
-        `/admin/readers?company_name=${encodeURIComponent(store.company_name)}&store_id=${encodeURIComponent(store.store_id)}`
-      );
-      setStoreReaders((p) => ({ ...p, [key]: res.readers || [] }));
-    } catch (e) {
-      setReaderError((p) => ({ ...p, [key]: e?.message || "Failed to load readers" }));
-      setStoreReaders((p) => ({ ...p, [key]: [] }));
+      const [readersRes, devicesRes] = await Promise.allSettled([
+        apiGet(`/admin/readers?company_name=${encodeURIComponent(store.company_name)}&store_id=${encodeURIComponent(store.store_id)}`),
+        apiGet(`/devices?store_id=${encodeURIComponent(store.store_id)}`),
+      ]);
+      setStoreReaders((p) => ({
+        ...p,
+        [key]: readersRes.status === "fulfilled" ? (readersRes.value.readers || []) : [],
+      }));
+      if (readersRes.status === "rejected") {
+        setReaderError((p) => ({ ...p, [key]: readersRes.reason?.message || "Failed to load readers" }));
+      }
+      setStoreDevices((p) => ({
+        ...p,
+        [key]: devicesRes.status === "fulfilled" ? (devicesRes.value.devices || []) : [],
+      }));
     } finally {
       setLoadingReaders(null);
     }
@@ -288,6 +298,7 @@ export default function CustomerDetail() {
               const key = store.store_id;
               const isExpanded = expandedStore === key;
               const readers = storeReaders[key] || [];
+              const devices = storeDevices[key] || [];
               const rErr = readerError[key] || "";
 
               return (
@@ -324,10 +335,10 @@ export default function CustomerDetail() {
                         "Loading…"
                       ) : (
                         <>
-                          Readers
+                          Devices
                           {storeReaders[key] !== undefined && (
                             <span className="opacity-60">
-                              ({storeReaders[key].length})
+                              ({readers.length + devices.length})
                             </span>
                           )}
                           <span className="opacity-50">{isExpanded ? "▲" : "▼"}</span>
@@ -336,67 +347,99 @@ export default function CustomerDetail() {
                     </button>
                   </div>
 
-                  {/* Readers panel */}
+                  {/* Devices panel */}
                   {isExpanded && (
-                    <div className="px-4 pb-4 pt-2 bg-black/20">
-                      {rErr ? (
-                        <div className="text-xs text-red-400">{rErr}</div>
-                      ) : readers.length === 0 ? (
-                        <div className="text-xs text-white/40 py-2">
-                          No readers registered for this store.
-                        </div>
-                      ) : (
-                        <table className="w-full text-xs mt-1">
-                          <thead>
-                            <tr className="text-white/40 border-b border-white/10">
-                              <th className="text-left py-1.5 pr-3">IP</th>
-                              <th className="text-left py-1.5 pr-3">Zone</th>
-                              <th className="text-left py-1.5 pr-3">Device ID</th>
-                              <th className="text-left py-1.5 pr-3">Status</th>
-                              <th className="text-left py-1.5">Actions</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {readers.map((r) => (
-                              <tr
-                                key={r.id}
-                                className="border-b border-white/5 hover:bg-white/5"
-                              >
-                                <td className="py-1.5 pr-3 font-mono">{r.reader_ip}</td>
-                                <td className="py-1.5 pr-3 text-white/60">
-                                  {r.zone_id || "-"}
-                                </td>
-                                <td className="py-1.5 pr-3 text-white/60">
-                                  {r.device_id || "-"}
-                                </td>
-                                <td className="py-1.5 pr-3">
-                                  <span
-                                    className={
-                                      r.is_active ? "text-green-400" : "text-red-400"
-                                    }
-                                  >
-                                    {r.is_active ? "Active" : "Inactive"}
-                                  </span>
-                                </td>
-                                <td className="py-1.5 flex gap-2">
-                                  <button
-                                    onClick={() => toggleReader(key, r)}
-                                    className="px-2 py-0.5 rounded border border-white/20 hover:bg-white/10"
-                                  >
-                                    {r.is_active ? "Disable" : "Enable"}
-                                  </button>
-                                  <button
-                                    onClick={() => deleteReader(key, r.id)}
-                                    className="px-2 py-0.5 rounded border border-red-500/30 text-red-400 hover:bg-red-500/10"
-                                  >
-                                    Remove
-                                  </button>
-                                </td>
+                    <div className="px-4 pb-4 pt-2 bg-black/20 space-y-4">
+                      {/* RFID Readers */}
+                      <div>
+                        <p className="text-[11px] font-semibold text-white/40 uppercase tracking-wide mb-1">
+                          RFID Readers
+                        </p>
+                        {rErr ? (
+                          <div className="text-xs text-red-400">{rErr}</div>
+                        ) : readers.length === 0 ? (
+                          <div className="text-xs text-white/30 py-1">No readers registered.</div>
+                        ) : (
+                          <table className="w-full text-xs">
+                            <thead>
+                              <tr className="text-white/40 border-b border-white/10">
+                                <th className="text-left py-1.5 pr-3">IP</th>
+                                <th className="text-left py-1.5 pr-3">Zone</th>
+                                <th className="text-left py-1.5 pr-3">Device ID</th>
+                                <th className="text-left py-1.5 pr-3">Status</th>
+                                <th className="text-left py-1.5">Actions</th>
                               </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      )}
+                            </thead>
+                            <tbody>
+                              {readers.map((r) => (
+                                <tr key={r.id} className="border-b border-white/5 hover:bg-white/5">
+                                  <td className="py-1.5 pr-3 font-mono">{r.reader_ip}</td>
+                                  <td className="py-1.5 pr-3 text-white/60">{r.zone_id || "-"}</td>
+                                  <td className="py-1.5 pr-3 text-white/60">{r.device_id || "-"}</td>
+                                  <td className="py-1.5 pr-3">
+                                    <span className={r.is_active ? "text-green-400" : "text-red-400"}>
+                                      {r.is_active ? "Active" : "Inactive"}
+                                    </span>
+                                  </td>
+                                  <td className="py-1.5 flex gap-2">
+                                    <button
+                                      onClick={() => toggleReader(key, r)}
+                                      className="px-2 py-0.5 rounded border border-white/20 hover:bg-white/10"
+                                    >
+                                      {r.is_active ? "Disable" : "Enable"}
+                                    </button>
+                                    <button
+                                      onClick={() => deleteReader(key, r.id)}
+                                      className="px-2 py-0.5 rounded border border-red-500/30 text-red-400 hover:bg-red-500/10"
+                                    >
+                                      Remove
+                                    </button>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        )}
+                      </div>
+
+                      {/* Handheld Devices */}
+                      <div>
+                        <p className="text-[11px] font-semibold text-white/40 uppercase tracking-wide mb-1">
+                          Handheld Devices
+                        </p>
+                        {devices.length === 0 ? (
+                          <div className="text-xs text-white/30 py-1">No handheld devices registered.</div>
+                        ) : (
+                          <table className="w-full text-xs">
+                            <thead>
+                              <tr className="text-white/40 border-b border-white/10">
+                                <th className="text-left py-1.5 pr-3">Device ID</th>
+                                <th className="text-left py-1.5 pr-3">Model</th>
+                                <th className="text-left py-1.5 pr-3">Zone</th>
+                                <th className="text-left py-1.5 pr-3">Last Seen</th>
+                                <th className="text-left py-1.5">Status</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {devices.map((d) => (
+                                <tr key={d.device_id} className="border-b border-white/5 hover:bg-white/5">
+                                  <td className="py-1.5 pr-3 font-mono text-white/80">{d.device_id}</td>
+                                  <td className="py-1.5 pr-3 text-white/60">{d.model || "-"}</td>
+                                  <td className="py-1.5 pr-3 text-white/60">{d.zone_id || "-"}</td>
+                                  <td className="py-1.5 pr-3 text-white/40">
+                                    {d.last_heartbeat_at ? new Date(d.last_heartbeat_at).toLocaleString() : "Never"}
+                                  </td>
+                                  <td className="py-1.5">
+                                    <span className={d.is_online ? "text-green-400" : "text-white/40"}>
+                                      {d.is_online ? "Online" : "Offline"}
+                                    </span>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        )}
+                      </div>
                     </div>
                   )}
                 </div>

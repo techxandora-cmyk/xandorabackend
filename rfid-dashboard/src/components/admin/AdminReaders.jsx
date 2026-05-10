@@ -54,6 +54,7 @@ function TokenRow({ label, token, type }) {
 export default function AdminReaders() {
   const [tokens, setTokens] = useState([]);
   const [readers, setReaders] = useState([]);
+  const [stores, setStores] = useState([]);
   const [loadingTokens, setLoadingTokens] = useState(true);
   const [loadingReaders, setLoadingReaders] = useState(true);
   const [error, setError] = useState(null);
@@ -76,8 +77,8 @@ export default function AdminReaders() {
     try {
       const data = await apiGet("/admin/tokens");
       setTokens(data.tokens || []);
-    } catch (e) {
-      setError(e.message);
+    } catch {
+      // tokens will be empty; store dropdown falls back to stores list
     } finally {
       setLoadingTokens(false);
     }
@@ -95,14 +96,29 @@ export default function AdminReaders() {
     }
   }, []);
 
+  const loadStores = useCallback(async () => {
+    try {
+      const data = await apiGet("/admin/stores");
+      setStores(Array.isArray(data?.stores) ? data.stores : []);
+    } catch {
+      // non-critical for form dropdown
+    }
+  }, []);
+
   useEffect(() => {
     loadTokens();
     loadReaders();
-  }, [loadTokens, loadReaders]);
+    loadStores();
+  }, [loadTokens, loadReaders, loadStores]);
 
   // Group tokens: company tokens first, then store tokens by company
   const companyTokens = tokens.filter((t) => t.token_type === "company");
   const storeTokens = tokens.filter((t) => t.token_type === "store");
+
+  // Store dropdown options: prefer token list (has token info), fall back to raw stores
+  const storeDropdownOptions = storeTokens.length > 0
+    ? storeTokens.map((t) => ({ label: `${t.company_name} / ${t.store_id}`, company_name: t.company_name, store_id: t.store_id }))
+    : stores.filter((s) => s.is_active).map((s) => ({ label: `${s.company_name} / ${s.store_id}`, company_name: s.company_name, store_id: s.store_id }));
 
   async function handleAddReader(e) {
     e.preventDefault();
@@ -202,9 +218,9 @@ export default function AdminReaders() {
               required
             >
               <option value="">— select store —</option>
-              {storeTokens.map((t) => (
-                <option key={t.id} value={`${t.company_name}||${t.store_id}`}>
-                  {t.company_name} / {t.store_id}
+              {storeDropdownOptions.map((opt) => (
+                <option key={`${opt.company_name}||${opt.store_id}`} value={`${opt.company_name}||${opt.store_id}`}>
+                  {opt.label}
                 </option>
               ))}
             </select>

@@ -34,14 +34,34 @@ export default function AdminStores() {
   );
   const [showInactive, setShowInactive] = useState(false);
 
-  const [companyName, setCompanyName] = useState(scopedCompany);
+  const [companyName, setCompanyName] = useState(
+    () => localStorage.getItem("xandora_company_view") || scopedCompany
+  );
   const [storeName, setStoreName] = useState("");
+  const [allCompanyNames, setAllCompanyNames] = useState([]);
 
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
+  // Load all company names for the create form dropdown (unfiltered)
+  useEffect(() => {
+    if (!isMasterAdmin) return;
+    apiGet("/admin/stores")
+      .then((res) => {
+        const names = Array.from(
+          new Set(
+            (Array.isArray(res?.stores) ? res.stores : [])
+              .map((s) => String(s?.company_name || "").trim())
+              .filter(Boolean)
+          )
+        ).sort((a, b) => a.localeCompare(b));
+        setAllCompanyNames(names);
+      })
+      .catch(() => {});
+  }, [isMasterAdmin]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const companyOptions = useMemo(() => {
-    const names = Array.from(
+    const base = allCompanyNames.length > 0 ? allCompanyNames : Array.from(
       new Set(
         (stores || [])
           .map((s) => String(s?.company_name || "").trim())
@@ -49,12 +69,11 @@ export default function AdminStores() {
       )
     ).sort((a, b) => a.localeCompare(b));
 
-    if (scopedCompany && !names.includes(scopedCompany)) {
-      names.unshift(scopedCompany);
+    if (scopedCompany && !base.includes(scopedCompany)) {
+      return [scopedCompany, ...base];
     }
-
-    return names;
-  }, [stores, scopedCompany]);
+    return base;
+  }, [allCompanyNames, stores, scopedCompany]);
 
   const loadStores = useCallback(async (options = {}) => {
     setLoading(true);
@@ -115,7 +134,7 @@ export default function AdminStores() {
     setError("");
     setSuccess("");
 
-    const payloadCompany = isMasterAdmin ? String(companyName || "").trim() : scopedCompany;
+    const payloadCompany = isMasterAdmin ? String(companyName === "__new__" ? "" : companyName || "").trim() : scopedCompany;
     const payloadStoreName = String(storeName || "").trim();
     const payloadStoreId = normalizeStoreIdInput(payloadStoreName);
 
@@ -302,13 +321,35 @@ export default function AdminStores() {
         {success ? <div className="mb-3 text-sm text-green-400">{success}</div> : null}
 
         <div className="grid md:grid-cols-3 gap-2">
-          <input
-            className="px-3 py-2 rounded bg-black/40 border border-white/20"
-            value={companyName}
-            onChange={(e) => setCompanyName(e.target.value)}
-            placeholder="Company Name"
-            disabled={!isMasterAdmin}
-          />
+          {isMasterAdmin ? (
+            companyName === "__new__" ? (
+              <input
+                className="px-3 py-2 rounded bg-black/40 border border-white/20"
+                autoFocus
+                value=""
+                onChange={(e) => setCompanyName(e.target.value)}
+                placeholder="Type new company name"
+              />
+            ) : (
+              <select
+                className="px-3 py-2 rounded bg-black/40 border border-white/20"
+                value={companyName}
+                onChange={(e) => setCompanyName(e.target.value)}
+              >
+                <option value="">— select company —</option>
+                {companyOptions.map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+                <option value="__new__">+ New company…</option>
+              </select>
+            )
+          ) : (
+            <input
+              className="px-3 py-2 rounded bg-black/40 border border-white/20 opacity-60"
+              value={companyName}
+              disabled
+            />
+          )}
           <input
             className="px-3 py-2 rounded bg-black/40 border border-white/20"
             value={storeName}
