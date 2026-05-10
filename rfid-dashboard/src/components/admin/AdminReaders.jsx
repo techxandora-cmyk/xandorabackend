@@ -96,12 +96,17 @@ export default function AdminReaders() {
     }
   }, []);
 
+  const [loadingStores, setLoadingStores] = useState(true);
+
   const loadStores = useCallback(async () => {
+    setLoadingStores(true);
     try {
       const data = await apiGet("/admin/stores");
       setStores(Array.isArray(data?.stores) ? data.stores : []);
     } catch {
       // non-critical for form dropdown
+    } finally {
+      setLoadingStores(false);
     }
   }, []);
 
@@ -217,7 +222,7 @@ export default function AdminReaders() {
               }}
               required
             >
-              <option value="">— select store —</option>
+              <option value="">{loadingStores ? "Loading stores…" : "— select store —"}</option>
               {storeDropdownOptions.map((opt) => (
                 <option key={`${opt.company_name}||${opt.store_id}`} value={`${opt.company_name}||${opt.store_id}`}>
                   {opt.label}

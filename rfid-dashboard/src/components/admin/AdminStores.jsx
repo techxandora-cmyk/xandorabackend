@@ -322,27 +322,16 @@ export default function AdminStores() {
 
         <div className="grid md:grid-cols-3 gap-2">
           {isMasterAdmin ? (
-            companyName === "__new__" ? (
-              <input
-                className="px-3 py-2 rounded bg-black/40 border border-white/20"
-                autoFocus
-                value=""
-                onChange={(e) => setCompanyName(e.target.value)}
-                placeholder="Type new company name"
-              />
-            ) : (
-              <select
-                className="px-3 py-2 rounded bg-black/40 border border-white/20"
-                value={companyName}
-                onChange={(e) => setCompanyName(e.target.value)}
-              >
-                <option value="">— select company —</option>
-                {companyOptions.map((c) => (
-                  <option key={c} value={c}>{c}</option>
-                ))}
-                <option value="__new__">+ New company…</option>
-              </select>
-            )
+            <select
+              className="px-3 py-2 rounded bg-black/40 border border-white/20"
+              value={companyName}
+              onChange={(e) => setCompanyName(e.target.value)}
+            >
+              <option value="">— select company —</option>
+              {companyOptions.map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
           ) : (
             <input
               className="px-3 py-2 rounded bg-black/40 border border-white/20 opacity-60"
