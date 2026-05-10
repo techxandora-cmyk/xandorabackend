@@ -1,15 +1,15 @@
-[Unit]
-Description=Zyro RFID Reader Bridge (%i)
+﻿[Unit]
+Description=Xandora RFID Reader Bridge (%i)
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
-User=zyro
-Group=zyro
+User=Xandora
+Group=Xandora
 WorkingDirectory=/opt/rfid-middleware
-EnvironmentFile=/etc/zyro-reader/%i.env
-ExecStart=/usr/bin/node /opt/rfid-middleware/zyro-llrp-bridge.js
+EnvironmentFile=/etc/xandora-reader/%i.env
+ExecStart=/usr/bin/node /opt/rfid-middleware/xandora-llrp-bridge.js
 Restart=always
 RestartSec=3
 KillSignal=SIGINT

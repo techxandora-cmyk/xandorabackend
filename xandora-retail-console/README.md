@@ -16,8 +16,8 @@ Open:
 
 ## Touch-Screen Launch (Windows)
 
-- `launcher/Start-Xandora-Retail-Console.bat`
-- `launcher/Stop-Xandora-Retail-Console.bat`
+- `launcher/Start-xandora-Retail-Console.bat`
+- `launcher/Stop-xandora-Retail-Console.bat`
 
 ## Data Files
 
@@ -37,8 +37,8 @@ powershell -ExecutionPolicy Bypass -File .\scripts\apply-real-data.ps1 -Products
 Then restart with:
 
 ```powershell
-launcher\Stop-Xandora-Retail-Console.bat
-launcher\Start-Xandora-Retail-Console.bat
+launcher\Stop-xandora-Retail-Console.bat
+launcher\Start-xandora-Retail-Console.bat
 ```
 
 ## Notes

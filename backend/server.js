@@ -29,8 +29,10 @@ const buildCatalogRoutes = require("../src/api/routes/catalog");
 const buildInventoryIntelligenceRoutes = require("../src/api/routes/inventoryIntelligence");
 const buildStockRoutes = require("../src/api/routes/stock");
 const buildLaundryRoutes = require("../src/api/routes/laundry");
+const buildBridgeRoutes = require("../src/api/routes/bridge");
 const startAlertScheduler = require("../src/jobs/alertScheduler");
 const startDataRetentionJob = require("../src/jobs/dataRetention");
+const { applyPendingMigrations } = require("../src/services/dbMigrations");
 
 const app = express();
 const startedAt = new Date().toISOString();
@@ -246,6 +248,7 @@ app.use("/api/v1/catalog", buildCatalogRoutes(pool));
 app.use("/api/v1/stock", buildStockRoutes(pool));
 app.use("/api/v1/laundry", buildLaundryRoutes(pool));
 app.use("/api/v1/events", eventsRouter);
+app.use("/api/v1/bridge", buildBridgeRoutes(pool));
 
 app.get("/api/health/live", (req, res) => {
   return res.status(200).json({
@@ -288,11 +291,6 @@ app.get("/api/health", async (req, res, next) => {
   }
 });
 
-if (!process.env.CLOUD_FUNCTION) {
-  startAlertScheduler(pool);
-  startDataRetentionJob(pool);
-}
-
 app.use((req, res) => {
   return res.status(404).json(errorPayload(req, "Not Found"));
 });
@@ -315,32 +313,71 @@ app.use((err, req, res, _next) => {
   );
 });
 
-if (!process.env.CLOUD_FUNCTION) {
-  const PORT = Number(process.env.PORT || 3000);
-  const server = app.listen(PORT, () => {
-    logger.info(
-      {
-        url: `http://localhost:${PORT}`,
-        cors_origin: CONFIGURED_FRONTEND_ORIGIN || "localhost dev origins",
-        pg_pool_max: PG_POOL_MAX,
-        pg_idle_timeout_ms: PG_IDLE_TIMEOUT_MS,
-        pg_connection_timeout_ms: PG_CONN_TIMEOUT_MS,
-        body_limit: BODY_LIMIT,
-      },
-      "API startup complete"
-    );
-  });
+let startupPromise = null;
 
-  server.on("error", (err) => {
+async function startServer() {
+  if (startupPromise) {
+    return startupPromise;
+  }
+
+  startupPromise = (async () => {
+    const client = await pool.connect();
+    try {
+      const appliedMigrations = await applyPendingMigrations(client);
+      if (appliedMigrations.length) {
+        logger.info(
+          { applied_migrations: appliedMigrations },
+          "Applied pending database migrations before API startup"
+        );
+      }
+    } finally {
+      client.release();
+    }
+
+    startAlertScheduler(pool);
+    startDataRetentionJob(pool);
+
+    const PORT = Number(process.env.PORT || 3000);
+    const server = app.listen(PORT, () => {
+      logger.info(
+        {
+          url: `http://localhost:${PORT}`,
+          cors_origin: CONFIGURED_FRONTEND_ORIGIN || "localhost dev origins",
+          pg_pool_max: PG_POOL_MAX,
+          pg_idle_timeout_ms: PG_IDLE_TIMEOUT_MS,
+          pg_connection_timeout_ms: PG_CONN_TIMEOUT_MS,
+          body_limit: BODY_LIMIT,
+        },
+        "API startup complete"
+      );
+    });
+
+    server.on("error", (err) => {
+      logger.error(
+        { err: err && err.message ? err.message : err },
+        "Failed to bind API port"
+      );
+      process.exit(1);
+    });
+
+    return server;
+  })().catch((err) => {
     logger.error(
-      { err: err && err.message ? err.message : err },
-      "Failed to bind API port"
+      { err: err && err.message ? err.message : err, stack: err?.stack },
+      "Failed to apply database migrations during API startup"
     );
     process.exit(1);
   });
+
+  return startupPromise;
+}
+
+if (!process.env.CLOUD_FUNCTION) {
+  startServer();
 }
 
 module.exports = {
   app,
   pool,
+  startServer,
 };

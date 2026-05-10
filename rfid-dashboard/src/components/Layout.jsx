@@ -1,51 +1,73 @@
-import { NavLink, Outlet } from "react-router-dom";
+﻿import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { apiGet } from "@/lib/api";
 import StatusIndicator from "./StatusIndicator";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { initTheme, toggleDark } from "@/lib/theme";
+import {
+  LayoutDashboard,
+  ShoppingCart,
+  Cpu,
+  Package,
+  Bell,
+  LogIn,
+  LogOut,
+  ClipboardList,
+  Search,
+  ShieldCheck,
+  Sun,
+  Moon,
+  Menu,
+  X,
+} from "lucide-react";
 
 const NAV_ITEMS_BY_PRODUCT = {
   retail: [
-    { to: "", label: "Overview", perm: "dashboard.view_overview" },
+    { to: "", label: "Overview", icon: LayoutDashboard, perm: "dashboard.view_overview" },
     {
       to: "pos",
       label: "Checkout",
+      icon: ShoppingCart,
       anyOf: [
         "dashboard.view_pos",
         "dashboard.view_billing",
         "dashboard.view_recent_scans",
       ],
     },
-    { to: "devices", label: "Devices", perm: "dashboard.view_devices" },
-    { to: "stock", label: "Stock", perm: "dashboard.view_stock" },
-    { to: "alerts", label: "Alerts", perm: "dashboard.view_alerts" },
+    { to: "devices", label: "Devices", icon: Cpu, perm: "dashboard.view_devices" },
+    { to: "stock", label: "Stock", icon: Package, perm: "dashboard.view_stock" },
+    { to: "alerts", label: "Alerts", icon: Bell, perm: "dashboard.view_alerts" },
   ],
   laundry: [
     {
       to: "laundry",
       label: "Dashboard",
+      icon: LayoutDashboard,
       end: true,
       anyOf: ["dashboard.view_laundry", "dashboard.manage_laundry"],
     },
     {
       to: "laundry/inbound",
       label: "Inbound",
+      icon: LogIn,
       anyOf: ["dashboard.view_laundry", "dashboard.manage_laundry"],
     },
     {
       to: "laundry/outbound",
       label: "Outbound",
+      icon: LogOut,
       anyOf: ["dashboard.view_laundry", "dashboard.manage_laundry"],
     },
     {
       to: "laundry/data-entry",
       label: "Data Entry",
+      icon: ClipboardList,
       anyOf: ["dashboard.view_laundry", "dashboard.manage_laundry"],
     },
     {
       to: "laundry/devices",
       label: "Devices",
+      icon: Cpu,
       anyOf: ["dashboard.view_laundry", "dashboard.manage_laundry"],
     },
   ],
@@ -53,22 +75,26 @@ const NAV_ITEMS_BY_PRODUCT = {
     {
       to: "stock-audit",
       label: "Dashboard",
+      icon: LayoutDashboard,
       end: true,
       anyOf: ["dashboard.view_stock_audit", "dashboard.manage_stock_audit"],
     },
     {
       to: "stock-audit/sessions",
       label: "Sessions",
+      icon: ClipboardList,
       anyOf: ["dashboard.view_stock_audit", "dashboard.manage_stock_audit"],
     },
     {
       to: "stock-audit/findings",
       label: "Findings",
+      icon: Search,
       anyOf: ["dashboard.view_stock_audit", "dashboard.manage_stock_audit"],
     },
     {
       to: "stock-audit/devices",
       label: "Devices",
+      icon: Cpu,
       anyOf: ["dashboard.view_stock_audit", "dashboard.manage_stock_audit"],
     },
   ],
@@ -130,6 +156,7 @@ export default function Layout() {
     isMasterAdmin,
     productKey,
   } = useAuth();
+  const navigate = useNavigate();
 
   const [isDark, setIsDark] = useState(() => initTheme().dark);
   const tokenStores = useMemo(() => {
@@ -147,13 +174,14 @@ export default function Layout() {
   const [adminStoreRows, setAdminStoreRows] = useState([]);
   const [accountOptions, setAccountOptions] = useState([]);
   const [storeId, setStoreId] = useState(() => {
-    const persisted = localStorage.getItem("zyro_store_id") || "";
+    const persisted = localStorage.getItem("xandora_store_id") || "";
     return persisted || tokenStores[0] || "";
   });
   const [companyView, setCompanyView] = useState(() =>
-    normalizeCompanyViewValue(localStorage.getItem("zyro_company_view") || "")
+    normalizeCompanyViewValue(localStorage.getItem("xandora_company_view") || "")
   );
   const [open, setOpen] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const didRunStoreSyncRef = useRef(false);
 
   async function refreshAccessibleStores() {
@@ -365,9 +393,9 @@ export default function Layout() {
       refreshAccessibleStores();
     }
 
-    window.addEventListener("zyro_stores_updated", handleStoreEvents);
+    window.addEventListener("xandora_stores_updated", handleStoreEvents);
     return () => {
-      window.removeEventListener("zyro_stores_updated", handleStoreEvents);
+      window.removeEventListener("xandora_stores_updated", handleStoreEvents);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canAccessAdminUI, tokenStores.join("|"), companyView, isMasterAdmin]);
@@ -375,7 +403,7 @@ export default function Layout() {
   useEffect(() => {
     if (!stores.length) {
       if (storeId) setStoreId("");
-      localStorage.removeItem("zyro_store_id");
+      localStorage.removeItem("xandora_store_id");
       return;
     }
 
@@ -391,29 +419,29 @@ export default function Layout() {
     }
 
     if (storeId) {
-      localStorage.setItem("zyro_store_id", storeId);
+      localStorage.setItem("xandora_store_id", storeId);
     } else {
-      localStorage.removeItem("zyro_store_id");
+      localStorage.removeItem("xandora_store_id");
     }
-    window.dispatchEvent(new Event("zyro_store_changed"));
+    window.dispatchEvent(new Event("xandora_store_changed"));
   }, [storeId]);
 
   useEffect(() => {
     function syncCompanyView() {
       const normalized = normalizeCompanyViewValue(
-        localStorage.getItem("zyro_company_view") || ""
+        localStorage.getItem("xandora_company_view") || ""
       );
       setCompanyView((prev) => (prev === normalized ? prev : normalized));
       if (!normalized) {
-        localStorage.removeItem("zyro_company_view");
+        localStorage.removeItem("xandora_company_view");
       }
     }
 
     window.addEventListener("storage", syncCompanyView);
-    window.addEventListener("zyro_company_view_changed", syncCompanyView);
+    window.addEventListener("xandora_company_view_changed", syncCompanyView);
     return () => {
       window.removeEventListener("storage", syncCompanyView);
-      window.removeEventListener("zyro_company_view_changed", syncCompanyView);
+      window.removeEventListener("xandora_company_view_changed", syncCompanyView);
     };
   }, []);
 
@@ -459,7 +487,7 @@ export default function Layout() {
     };
   }, [user]);
 
-  const badgeSeenKey = `zyro_badge_seen_${roleBadge.key}`;
+  const badgeSeenKey = `xandora_badge_seen_${roleBadge.key}`;
   const animateOnce = !sessionStorage.getItem(badgeSeenKey);
 
   useEffect(() => {
@@ -478,12 +506,12 @@ export default function Layout() {
 
     const nextCompany = String(nextCompanyRaw || "").trim();
     if (nextCompany) {
-      localStorage.setItem("zyro_company_view", nextCompany);
+      localStorage.setItem("xandora_company_view", nextCompany);
     } else {
-      localStorage.removeItem("zyro_company_view");
+      localStorage.removeItem("xandora_company_view");
     }
     setCompanyView(nextCompany);
-    window.dispatchEvent(new Event("zyro_company_view_changed"));
+    window.dispatchEvent(new Event("xandora_company_view_changed"));
 
     const scopedStoreIds = Array.from(
       new Set(
@@ -504,7 +532,7 @@ export default function Layout() {
       ? scopedStoreIds
       : fallbackAccountStoreIds;
 
-    const persistedStore = String(localStorage.getItem("zyro_store_id") || "").trim();
+    const persistedStore = String(localStorage.getItem("xandora_store_id") || "").trim();
     const nextStoreId = nextCompany
       ? candidateStoreIds.includes(persistedStore)
         ? persistedStore
@@ -512,12 +540,17 @@ export default function Layout() {
       : "";
 
     if (nextStoreId) {
-      localStorage.setItem("zyro_store_id", nextStoreId);
+      localStorage.setItem("xandora_store_id", nextStoreId);
     } else {
-      localStorage.removeItem("zyro_store_id");
+      localStorage.removeItem("xandora_store_id");
     }
     setStoreId(nextStoreId);
-    window.dispatchEvent(new Event("zyro_store_changed"));
+    window.dispatchEvent(new Event("xandora_store_changed"));
+
+    // Drop master admin into the customer's users view (forces navigation even if already on /admin)
+    if (nextCompany) {
+      navigate("/admin/users");
+    }
   }
 
   function goBackToMyAccount() {
@@ -577,33 +610,38 @@ export default function Layout() {
             </div>
           </div>
 
-          <nav className="flex gap-2">
-            {navItems.filter((item) => canViewNavItem(item)).map((item) => (
-              <NavLink
-                key={item.label}
-                to={item.to}
-                end={Boolean(item.end) || item.to === ""}
-                className={({ isActive }) =>
-                  [
-                    "rounded border px-3 py-1.5 text-xs transition-all",
-                    isActive ? navActiveClass : navIdleClass,
-                  ].join(" ")
-                }
-              >
-                {item.label}
-              </NavLink>
-            ))}
+          <nav className="hidden md:flex gap-1.5">
+            {navItems.filter((item) => canViewNavItem(item)).map((item) => {
+              const Icon = item.icon || null;
+              return (
+                <NavLink
+                  key={item.label}
+                  to={item.to}
+                  end={Boolean(item.end) || item.to === ""}
+                  className={({ isActive }) =>
+                    [
+                      "inline-flex items-center gap-1.5 rounded border px-3 py-1.5 text-xs transition-all",
+                      isActive ? navActiveClass : navIdleClass,
+                    ].join(" ")
+                  }
+                >
+                  {Icon && <Icon size={13} strokeWidth={2} />}
+                  {item.label}
+                </NavLink>
+              );
+            })}
 
             {showPortalNav && (
               <NavLink
                 to="admin"
                 className={({ isActive }) =>
                   [
-                    "rounded border px-3 py-1.5 text-xs transition-all",
+                    "inline-flex items-center gap-1.5 rounded border px-3 py-1.5 text-xs transition-all",
                     isActive ? navActiveClass : navIdleClass,
                   ].join(" ")
                 }
               >
+                <ShieldCheck size={13} strokeWidth={2} />
                 Admin
               </NavLink>
             )}
@@ -613,58 +651,44 @@ export default function Layout() {
                 to="admin/contracts"
                 className={({ isActive }) =>
                   [
-                    "rounded border px-3 py-1.5 text-xs transition-all",
+                    "inline-flex items-center gap-1.5 rounded border px-3 py-1.5 text-xs transition-all",
                     isActive ? navActiveClass : navIdleClass,
                   ].join(" ")
                 }
               >
+                <ClipboardList size={13} strokeWidth={2} />
                 Contracts
               </NavLink>
             )}
           </nav>
 
-          <div className="relative flex items-center gap-3">
-            {showAccountSelector ? (
-              <div className="flex items-center">
-                <select
-                  value={companyView}
-                  onChange={(e) => onCompanyChange(e.target.value)}
-                  className={[
-                    "w-full sm:min-w-[200px] rounded border px-2 py-1 text-xs focus:outline-none",
-                    selectClass,
-                  ].join(" ")}
-                  title="Account Switch"
-                >
-                  <option value="">All customers</option>
-                  {accountOptions.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            ) : companyView && canAccessAdminUI ? (
-              <span className="rounded-full border border-cyan-500/45 bg-cyan-500/10 px-2 py-1 text-[10px] text-cyan-300">
+          <div className="relative flex items-center gap-2">
+            {/* Company scope indicator — display only */}
+            {companyView && canAccessAdminUI && (
+              <span className="hidden md:inline rounded-full border border-cyan-500/45 bg-cyan-500/10 px-2 py-1 text-[10px] text-cyan-300">
                 {companyView}
               </span>
-            ) : null}
+            )}
 
+            {/* Theme toggle — icon only on mobile */}
             <button
               type="button"
               onClick={onToggleTheme}
-              className="theme-toggle-btn"
+              className="theme-toggle-btn inline-flex items-center gap-1.5"
               title={isDark ? "Switch to light mode" : "Switch to dark mode"}
             >
-              {isDark ? "Light" : "Dark"}
+              {isDark ? <Sun size={14} strokeWidth={2} /> : <Moon size={14} strokeWidth={2} />}
+              <span className="hidden sm:inline">{isDark ? "Light" : "Dark"}</span>
             </button>
 
+            {/* Store selector — compact on mobile */}
             {showStoreSelector && (
               <select
                 value={storeId}
                 onChange={(e) => setStoreId(e.target.value)}
                 disabled={!stores.length}
                 className={[
-                  "rounded border px-2 py-1 text-xs focus:outline-none",
+                  "max-w-[120px] md:max-w-none rounded border px-2 py-1 text-xs focus:outline-none",
                   selectClass,
                 ].join(" ")}
               >
@@ -675,24 +699,25 @@ export default function Layout() {
                     </option>
                   ))
                 ) : (
-                  <option value="">NO_STORE_ACCESS</option>
+                  <option value="">No store assigned</option>
                 )}
               </select>
             )}
 
             {shouldShowStorePlaceholder && (
-              <span className="rounded border border-slate-500/40 px-2 py-1 text-[10px] opacity-80">
+              <span className="hidden md:inline rounded border border-slate-500/40 px-2 py-1 text-[10px] opacity-80">
                 Select customer
               </span>
             )}
 
             <StatusIndicator />
 
+            {/* Role badge / profile — desktop only */}
             <button
               type="button"
               onClick={() => setOpen((v) => !v)}
               className={[
-                "rounded-full border px-3 py-1 text-[10px] glow-border",
+                "hidden md:flex rounded-full border px-3 py-1 text-[10px] glow-border",
                 roleBadge.className,
                 animateOnce ? "animate-pulse-once" : "",
               ].join(" ")}
@@ -700,48 +725,159 @@ export default function Layout() {
               {roleBadge.label}
             </button>
 
+            {/* Desktop profile dropdown */}
             {open && (
               <div
                 className={[
-                  "absolute right-0 top-12 w-52 max-w-[90vw] rounded-xl border backdrop-blur-xl shadow-lg",
+                  "absolute right-0 top-12 w-60 max-w-[90vw] rounded-xl border backdrop-blur-xl shadow-lg overflow-hidden z-50",
                   isDark
                     ? "border-white/12 bg-[#091523]/95"
                     : "border-[#A3B8CC]/75 bg-white/95",
                 ].join(" ")}
               >
-                {isMasterAdmin && companyView ? (
-                  <button
-                    type="button"
-                    onClick={goBackToMyAccount}
-                    className={[
-                      "w-full px-3 py-2 text-left text-xs hover:bg-cyan-500/10",
-                      isDark ? "text-cyan-300" : "text-cyan-700",
-                    ].join(" ")}
-                    title="Go back to your account view"
-                  >
-                    {user?.email}
-                  </button>
-                ) : (
-                  <div
-                    className={[
-                      "px-3 py-2 text-xs",
-                      isDark ? "text-[#B6C3D1]" : "text-[#444F60]",
-                    ].join(" ")}
-                  >
-                    {user?.email}
-                  </div>
-                )}
+                <div className={["px-4 py-3 border-b", isDark ? "border-white/8" : "border-black/6"].join(" ")}>
+                  {isMasterAdmin && companyView ? (
+                    <button
+                      type="button"
+                      onClick={goBackToMyAccount}
+                      className={[
+                        "w-full text-left text-xs hover:opacity-80 transition-opacity",
+                        isDark ? "text-cyan-300" : "text-cyan-700",
+                      ].join(" ")}
+                      title="Go back to your account view"
+                    >
+                      {user?.email}
+                    </button>
+                  ) : (
+                    <div className={["text-xs font-medium truncate", isDark ? "text-[#DBE4ED]" : "text-[#1A263D]"].join(" ")}>
+                      {user?.email}
+                    </div>
+                  )}
+                  {storeId && (
+                    <div className={["mt-1 text-[10px] truncate", isDark ? "text-white/45" : "text-black/45"].join(" ")}>
+                      {storeNameById[storeId] || storeId}
+                    </div>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => { setOpen(false); navigate("/change-password"); }}
+                  className={["w-full px-4 py-2.5 text-left text-xs hover:bg-white/6 transition-colors", isDark ? "text-white/70" : "text-[#1A263D]/80"].join(" ")}
+                >
+                  Change password
+                </button>
                 <button
                   type="button"
                   onClick={logout}
-                  className="w-full rounded-b-xl px-3 py-2 text-left text-xs text-red-400 hover:bg-red-500/10"
+                  className="w-full px-4 py-2.5 text-left text-xs text-red-400 hover:bg-red-500/10 transition-colors"
                 >
-                  Logout
+                  Sign out
                 </button>
               </div>
             )}
+
+            {/* Hamburger — mobile only */}
+            <button
+              type="button"
+              onClick={() => { setMobileNavOpen((v) => !v); setOpen(false); }}
+              className={[
+                "md:hidden inline-flex items-center justify-center rounded border p-1.5 transition-colors",
+                isDark
+                  ? "border-white/15 text-white/85 hover:bg-white/10"
+                  : "border-[#A3B8CC]/65 text-[#1A263D] hover:bg-[#F2F9FF]",
+              ].join(" ")}
+              aria-label="Toggle menu"
+            >
+              {mobileNavOpen ? <X size={18} strokeWidth={2} /> : <Menu size={18} strokeWidth={2} />}
+            </button>
           </div>
         </div>
+        {/* Mobile nav drawer */}
+        {mobileNavOpen && (
+          <div className={["md:hidden border-t pb-4", isDark ? "border-white/10" : "border-[#A3B8CC]/30"].join(" ")}>
+            <div className="mx-auto max-w-[1280px] px-4 pt-3 flex flex-col gap-1.5">
+
+              {/* Nav items */}
+              {navItems.filter((item) => canViewNavItem(item)).map((item) => {
+                const Icon = item.icon || null;
+                return (
+                  <NavLink
+                    key={item.label}
+                    to={item.to}
+                    end={Boolean(item.end) || item.to === ""}
+                    onClick={() => setMobileNavOpen(false)}
+                    className={({ isActive }) =>
+                      [
+                        "inline-flex items-center gap-2 rounded border px-4 py-3 text-sm transition-all",
+                        isActive ? navActiveClass : navIdleClass,
+                      ].join(" ")
+                    }
+                  >
+                    {Icon && <Icon size={15} strokeWidth={2} />}
+                    {item.label}
+                  </NavLink>
+                );
+              })}
+
+              {showPortalNav && (
+                <NavLink
+                  to="admin"
+                  onClick={() => setMobileNavOpen(false)}
+                  className={({ isActive }) =>
+                    ["inline-flex items-center gap-2 rounded border px-4 py-3 text-sm transition-all",
+                     isActive ? navActiveClass : navIdleClass].join(" ")
+                  }
+                >
+                  <ShieldCheck size={15} strokeWidth={2} />
+                  Admin
+                </NavLink>
+              )}
+
+              {showContractsNav && (
+                <NavLink
+                  to="admin/contracts"
+                  onClick={() => setMobileNavOpen(false)}
+                  className={({ isActive }) =>
+                    ["inline-flex items-center gap-2 rounded border px-4 py-3 text-sm transition-all",
+                     isActive ? navActiveClass : navIdleClass].join(" ")
+                  }
+                >
+                  <ClipboardList size={15} strokeWidth={2} />
+                  Contracts
+                </NavLink>
+              )}
+
+
+              {/* Divider + user info + sign out */}
+              <div className={["mt-2 pt-3 border-t flex items-center justify-between gap-3", isDark ? "border-white/10" : "border-black/8"].join(" ")}>
+                <div className="flex flex-col min-w-0">
+                  <span className={["text-xs font-medium truncate", isDark ? "text-[#DBE4ED]" : "text-[#1A263D]"].join(" ")}>
+                    {user?.email}
+                  </span>
+                  <span className={["text-[10px] mt-0.5", isDark ? "text-white/45" : "text-black/45"].join(" ")}>
+                    {roleBadge.label}
+                  </span>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => { setMobileNavOpen(false); navigate("/change-password"); }}
+                    className={["text-xs px-3 py-1.5 rounded border transition-colors", isDark ? "border-white/20 text-white/70 hover:bg-white/10" : "border-black/15 text-[#1A263D]/70 hover:bg-black/5"].join(" ")}
+                  >
+                    Change password
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { logout(); setMobileNavOpen(false); }}
+                    className="text-xs text-red-400 hover:text-red-300 transition-colors px-3 py-1.5 rounded border border-red-500/30 hover:bg-red-500/10"
+                  >
+                    Sign out
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </header>
 
       <main className="mx-auto max-w-[1280px] px-4 py-6">

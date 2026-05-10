@@ -1,10 +1,10 @@
-// src/pages/Scans.jsx
+﻿// src/pages/Scans.jsx
 import { useEffect, useState, useCallback, useRef } from "react";
 import { apiGet } from "@/lib/api";
 
 export default function Scans() {
   const [storeId, setStoreId] = useState(
-    () => localStorage.getItem("zyro_store_id") || "STORE_001"
+    () => localStorage.getItem("xandora_store_id") || "STORE_001"
   );
 
   const storeRef = useRef(storeId);
@@ -52,16 +52,16 @@ export default function Scans() {
   useEffect(() => {
     function onStoreChanged() {
       const sid =
-        localStorage.getItem("zyro_store_id") || "STORE_001";
+        localStorage.getItem("xandora_store_id") || "STORE_001";
       setStoreId(sid);
       storeRef.current = sid;
       loadScans();
     }
 
-    window.addEventListener("zyro_store_changed", onStoreChanged);
+    window.addEventListener("xandora_store_changed", onStoreChanged);
     return () =>
       window.removeEventListener(
-        "zyro_store_changed",
+        "xandora_store_changed",
         onStoreChanged
       );
   }, [loadScans]);

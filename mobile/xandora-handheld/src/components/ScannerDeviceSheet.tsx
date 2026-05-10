@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Modal,
@@ -13,6 +13,7 @@ import { useAppTheme } from '../context/ThemeContext';
 
 export default function ScannerDeviceSheet() {
   const { theme } = useAppTheme();
+  const [refreshing, setRefreshing] = useState(false);
   const {
     bluetoothEnabled,
     closeScannerPicker,
@@ -23,6 +24,7 @@ export default function ScannerDeviceSheet() {
     discoveredDevices,
     openBluetoothSettings,
     pairedDevices,
+    rfidReaders,
     refreshScannerDevices,
     scannerConnecting,
     scannerConnected,
@@ -34,18 +36,40 @@ export default function ScannerDeviceSheet() {
   const devices = useMemo(() => {
     const bucket = new Map<string, (typeof pairedDevices)[number]>();
 
-    [...pairedDevices, ...discoveredDevices].forEach(device => {
-      bucket.set(device.address, device);
+    [...pairedDevices, ...discoveredDevices, ...rfidReaders].forEach(device => {
+      const addressKey = String(device.address || '').trim().toUpperCase();
+      const existingEntry = Array.from(bucket.values()).find(existing => {
+        const existingAddress = String(existing.address || '').trim().toUpperCase();
+        return addressKey && existingAddress === addressKey;
+      });
+
+      if (!existingEntry) {
+        bucket.set(device.id, device);
+        return;
+      }
+
+      if (device.backend === 'zebra_rfid' && existingEntry.backend !== 'zebra_rfid') {
+        bucket.delete(existingEntry.id);
+        bucket.set(device.id, device);
+        return;
+      }
+
+      if (!existingEntry.connected && device.connected) {
+        bucket.delete(existingEntry.id);
+        bucket.set(device.id, device);
+      }
     });
 
     return Array.from(bucket.values()).sort((left, right) => {
       if (left.connected && !right.connected) return -1;
       if (!left.connected && right.connected) return 1;
+      if (left.backend === 'zebra_rfid' && right.backend !== 'zebra_rfid') return -1;
+      if (left.backend !== 'zebra_rfid' && right.backend === 'zebra_rfid') return 1;
       if (left.bonded && !right.bonded) return -1;
       if (!left.bonded && right.bonded) return 1;
       return left.name.localeCompare(right.name);
     });
-  }, [discoveredDevices, pairedDevices]);
+  }, [discoveredDevices, pairedDevices, rfidReaders]);
 
   return (
     <Modal
@@ -70,7 +94,7 @@ export default function ScannerDeviceSheet() {
           <View style={styles.sheetHeader}>
             <View style={styles.sheetCopy}>
               <Text style={[styles.kicker, { color: theme.textMuted }]}>
-                Bluetooth scanner
+                Scanner / RFID Reader
               </Text>
               <Text style={[styles.title, { color: theme.text }]}>
                 {scannerConnected
@@ -78,12 +102,15 @@ export default function ScannerDeviceSheet() {
                   : 'Connect a scanner'}
               </Text>
               <Text style={[styles.subtitle, { color: theme.textMuted }]}>
-                Pair the scanner in Android first if it does not appear here, then connect it in
-                Xandora.
+                Pair the device in Android first if it does not appear here, then connect it in
+                Xandora. Zebra RFID readers appear here when the Zebra SDK is bundled in the app.
               </Text>
             </View>
             <TouchableOpacity
-              style={[styles.closeButton, { backgroundColor: theme.surfaceAlt, borderColor: theme.border }]}
+              style={[
+                styles.closeButton,
+                { backgroundColor: theme.surfaceAlt, borderColor: theme.border },
+              ]}
               onPress={closeScannerPicker}
             >
               <Text style={[styles.closeButtonText, { color: theme.text }]}>Close</Text>
@@ -93,11 +120,19 @@ export default function ScannerDeviceSheet() {
           <View style={styles.actionRow}>
             <TouchableOpacity
               style={[styles.actionButton, { backgroundColor: theme.primary }]}
-              onPress={() => {
-                refreshScannerDevices();
+              onPress={async () => {
+                setRefreshing(true);
+                try {
+                  await refreshScannerDevices();
+                } finally {
+                  setRefreshing(false);
+                }
               }}
+              disabled={refreshing || scannerDiscovering || scannerConnecting}
             >
-              <Text style={styles.actionButtonText}>Refresh</Text>
+              <Text style={styles.actionButtonText}>
+                {refreshing ? 'Refreshing...' : 'Refresh'}
+              </Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.actionButton, { backgroundColor: theme.secondary }]}
@@ -110,7 +145,10 @@ export default function ScannerDeviceSheet() {
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.secondaryButton, { backgroundColor: theme.surfaceAlt, borderColor: theme.border }]}
+              style={[
+                styles.secondaryButton,
+                { backgroundColor: theme.surfaceAlt, borderColor: theme.border },
+              ]}
               onPress={openBluetoothSettings}
             >
               <Text style={[styles.secondaryButtonText, { color: theme.text }]}>
@@ -139,7 +177,7 @@ export default function ScannerDeviceSheet() {
             <Text style={[styles.statusText, { color: theme.textMuted }]}>
               {scannerConnected
                 ? `Connected to ${connectedDevice?.name || connectedDevice?.address}`
-                : 'Choose a paired scanner to connect, or discover nearby devices.'}
+                : 'Choose a paired scanner, or connect a Zebra RFID reader from the list below.'}
             </Text>
           </View>
 
@@ -147,7 +185,7 @@ export default function ScannerDeviceSheet() {
             <View
               style={[
                 styles.errorPanel,
-                { backgroundColor: '#FEE2E2', borderColor: '#FCA5A5' },
+                styles.errorPanelDanger,
               ]}
             >
               <Text style={styles.errorText}>{scannerError}</Text>
@@ -174,15 +212,24 @@ export default function ScannerDeviceSheet() {
                 </Text>
                 <Text style={[styles.emptyText, { color: theme.textMuted }]}>
                   Make sure the scanner is paired in Android Bluetooth settings, then tap Refresh
-                  or Discover.
+                  or Discover. Zebra RFID readers require the Zebra SDK build and a paired RFD40.
                 </Text>
               </View>
             ) : (
               devices.map(device => {
-                const selected = connectedDevice?.address === device.address;
+                const selected = connectedDevice?.id === device.id;
+                const transportLabel =
+                  device.backend === 'zebra_rfid'
+                    ? 'Zebra RFID'
+                    : device.backend === 'datawedge'
+                    ? 'DataWedge'
+                    : device.bonded
+                    ? 'Paired Bluetooth'
+                    : 'Discovered Bluetooth';
+
                 return (
                   <View
-                    key={device.address}
+                    key={device.id}
                     style={[
                       styles.deviceCard,
                       {
@@ -200,7 +247,7 @@ export default function ScannerDeviceSheet() {
                           {device.address}
                         </Text>
                         <Text style={[styles.deviceMeta, { color: theme.textMuted }]}>
-                          {device.bonded ? 'Paired' : 'Discovered'} · {device.type}
+                          {transportLabel} · {device.type}
                         </Text>
                       </View>
                       {selected ? (
@@ -235,7 +282,7 @@ export default function ScannerDeviceSheet() {
                       <TouchableOpacity
                         style={[styles.connectButton, { backgroundColor: theme.primary }]}
                         onPress={() => {
-                          connectScanner(device.address);
+                          connectScanner(device.id);
                         }}
                         disabled={scannerConnecting}
                       >
@@ -319,25 +366,22 @@ const styles = StyleSheet.create({
   },
   actionButton: {
     flex: 1,
-    borderRadius: 16,
-    paddingVertical: 14,
+    borderRadius: 14,
+    paddingVertical: 12,
     alignItems: 'center',
+  },
+  secondaryButton: {
+    borderRadius: 14,
+    paddingHorizontal: 14,
     justifyContent: 'center',
+    borderWidth: 1,
+  },
+  secondaryButtonText: {
+    fontSize: 13,
+    fontWeight: '700',
   },
   actionButtonText: {
     color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '800',
-  },
-  secondaryButton: {
-    minWidth: 96,
-    borderRadius: 16,
-    borderWidth: 1,
-    paddingHorizontal: 14,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  secondaryButtonText: {
     fontSize: 13,
     fontWeight: '800',
   },
@@ -350,7 +394,7 @@ const styles = StyleSheet.create({
   statusTitle: {
     fontSize: 15,
     fontWeight: '800',
-    marginBottom: 4,
+    marginBottom: 6,
   },
   statusText: {
     fontSize: 13,
@@ -358,30 +402,35 @@ const styles = StyleSheet.create({
   },
   errorPanel: {
     borderWidth: 1,
-    borderRadius: 18,
-    padding: 14,
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
     marginBottom: 12,
+  },
+  errorPanelDanger: {
+    backgroundColor: '#FEE2E2',
+    borderColor: '#FCA5A5',
   },
   errorText: {
     color: '#991B1B',
     fontSize: 13,
-    lineHeight: 18,
     fontWeight: '700',
   },
   deviceList: {
-    flex: 1,
+    flexGrow: 0,
   },
   deviceListContent: {
-    paddingBottom: 18,
+    paddingBottom: 24,
+    gap: 12,
   },
   emptyPanel: {
     borderWidth: 1,
     borderRadius: 18,
-    padding: 16,
+    padding: 18,
     alignItems: 'center',
   },
   emptySpinner: {
-    marginBottom: 12,
+    marginBottom: 10,
   },
   emptyTitle: {
     fontSize: 16,
@@ -395,23 +444,22 @@ const styles = StyleSheet.create({
   },
   deviceCard: {
     borderWidth: 1,
-    borderRadius: 20,
-    padding: 14,
-    marginBottom: 10,
+    borderRadius: 18,
+    padding: 16,
   },
   deviceHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    gap: 10,
-    marginBottom: 12,
+    gap: 12,
+    marginBottom: 14,
   },
   deviceCopy: {
     flex: 1,
+    gap: 4,
   },
   deviceName: {
     fontSize: 16,
     fontWeight: '800',
-    marginBottom: 4,
   },
   deviceMeta: {
     fontSize: 12,
@@ -425,21 +473,19 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   connectedBadgeText: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '800',
     textTransform: 'uppercase',
-    letterSpacing: 0.6,
+    letterSpacing: 0.4,
   },
   connectButton: {
-    borderRadius: 16,
-    paddingVertical: 14,
+    borderRadius: 14,
     alignItems: 'center',
-    justifyContent: 'center',
+    paddingVertical: 12,
   },
   disconnectButton: {
-    borderRadius: 16,
-    paddingVertical: 14,
+    borderRadius: 14,
     alignItems: 'center',
-    justifyContent: 'center',
+    paddingVertical: 12,
   },
 });

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import { apiGet } from "@/lib/api";
 
 function timeAgo(ts) {
@@ -49,7 +49,7 @@ export default function DevicesPanel() {
       try {
         setError("");
         const storeId =
-          localStorage.getItem("zyro_store_id") || "STORE_001";
+          localStorage.getItem("xandora_store_id") || "STORE_001";
 
         const r = await apiGet(
           `/devices?store_id=${encodeURIComponent(storeId)}`

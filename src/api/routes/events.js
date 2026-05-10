@@ -1,4 +1,4 @@
-const express = require("express");
+﻿const express = require("express");
 
 const clients = new Set();
 const recentEvents = [];
@@ -33,7 +33,8 @@ function clearRecentEvents() {
 
 module.exports = function buildEventsRoutes(pool) {
   const router = express.Router();
-  const expectedScanKey = process.env.SCAN_API_KEY || "zyro_reader_001";
+  const expectedScanKey = process.env.SCAN_API_KEY || "xandora_reader_001";
+  const { lookupScanToken } = require("./lib/scanTokens");
 
   router.get("/stream", (req, res) => {
     res.setHeader("Content-Type", "text/event-stream");
@@ -64,9 +65,15 @@ module.exports = function buildEventsRoutes(pool) {
       const key =
         req.headers["x-scan-key"] ||
         req.headers["x-api-key"] ||
-        req.headers["x-zyro-scan-key"];
+        req.headers["x-xandora-scan-key"];
 
-      if (!key || key !== expectedScanKey) {
+      const isValidLegacyKey = key && key === expectedScanKey;
+      const isTokenKey = key && (key.startsWith("st_") || key.startsWith("ct_"));
+      const tokenRow = isTokenKey
+        ? await lookupScanToken(pool, key).catch(() => null)
+        : null;
+
+      if (!isValidLegacyKey && !(tokenRow?.is_active)) {
         return res.status(403).json({
           ok: false,
           error: "Forbidden (scan key required)",

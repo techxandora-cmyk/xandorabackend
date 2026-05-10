@@ -23,7 +23,7 @@ It is not the production Xandora stack.
 
 Double-click:
 
-`xandora-retail-console/launcher/Start-Xandora-Retail-Console.bat`
+`xandora-retail-console/launcher/Start-xandora-Retail-Console.bat`
 
 What happens:
 
@@ -35,7 +35,7 @@ What happens:
 
 Double-click:
 
-`xandora-retail-console/launcher/Stop-Xandora-Retail-Console.bat`
+`xandora-retail-console/launcher/Stop-xandora-Retail-Console.bat`
 
 If startup fails, check:
 
@@ -49,7 +49,7 @@ Edit these files:
 - `xandora-retail-console/backend/data/products.json`
 - `xandora-retail-console/backend/data/epc_map.json`
 
-Then restart the console with `Start-Xandora-Retail-Console.bat`.
+Then restart the console with `Start-xandora-Retail-Console.bat`.
 
 Or run:
 
@@ -62,7 +62,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\apply-real-data.ps1 -Products
 ## Close Button
 
 - The top-right `Close` button requests clean shutdown from inside the UI.
-- You can also use `Stop-Xandora-Retail-Console.bat` externally.
+- You can also use `Stop-xandora-Retail-Console.bat` externally.
 
 ## Manual API Checks
 

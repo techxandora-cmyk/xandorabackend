@@ -7,6 +7,7 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import ScreenHeader from '../components/ScreenHeader';
@@ -108,6 +109,7 @@ function washWarningRank(stage: WashWarningStage): number {
 
 export default function NotificationsScreen({ navigation }: any) {
   const { theme } = useAppTheme();
+  const { width } = useWindowDimensions();
   const [productKey, setProductKey] = useState('');
   const [alerts, setAlerts] = useState<MobileAlert[]>([]);
   const [laundryAlerts, setLaundryAlerts] = useState<LaundryItem[]>([]);
@@ -118,6 +120,7 @@ export default function NotificationsScreen({ navigation }: any) {
   const [accessReady, setAccessReady] = useState(false);
 
   const isLaundryModule = productKey === 'laundry';
+  const isCompact = width < 390;
 
   const loadAlerts = useCallback(
     async (showRefreshing = false, productOverride = '') => {
@@ -218,7 +221,7 @@ export default function NotificationsScreen({ navigation }: any) {
   return (
     <ScrollView
       style={[styles.container, { backgroundColor: theme.background }]}
-      contentContainerStyle={styles.content}
+      contentContainerStyle={[styles.content, isCompact && styles.contentCompact]}
       refreshControl={
         <RefreshControl
           refreshing={refreshing}
@@ -358,16 +361,34 @@ export default function NotificationsScreen({ navigation }: any) {
               Review validation exceptions, reader issues, and operational alerts for the current store.
             </Text>
 
-            <View style={styles.summaryRow}>
-              <View style={[styles.summaryCard, { backgroundColor: theme.surfaceAlt }]}>
+            <View style={[styles.summaryRow, isCompact && styles.summaryRowCompact]}>
+              <View
+                style={[
+                  styles.summaryCard,
+                  isCompact && styles.summaryCardCompact,
+                  { backgroundColor: theme.surfaceAlt },
+                ]}
+              >
                 <Text style={[styles.summaryLabel, { color: theme.textMuted }]}>Open</Text>
                 <Text style={[styles.summaryValue, { color: theme.text }]}>{openCount}</Text>
               </View>
-              <View style={[styles.summaryCard, { backgroundColor: theme.surfaceAlt }]}>
+              <View
+                style={[
+                  styles.summaryCard,
+                  isCompact && styles.summaryCardCompact,
+                  { backgroundColor: theme.surfaceAlt },
+                ]}
+              >
                 <Text style={[styles.summaryLabel, { color: theme.textMuted }]}>Critical</Text>
                 <Text style={[styles.summaryValue, { color: theme.text }]}>{criticalCount}</Text>
               </View>
-              <View style={[styles.summaryCard, { backgroundColor: theme.surfaceAlt }]}>
+              <View
+                style={[
+                  styles.summaryCard,
+                  isCompact && styles.summaryCardCompactFull,
+                  { backgroundColor: theme.surfaceAlt },
+                ]}
+              >
                 <Text style={[styles.summaryLabel, { color: theme.textMuted }]}>Validation</Text>
                 <Text style={[styles.summaryValue, { color: theme.text }]}>{validationCount}</Text>
               </View>
@@ -498,6 +519,10 @@ const styles = StyleSheet.create({
     padding: 16,
     paddingBottom: 28,
   },
+  contentCompact: {
+    paddingHorizontal: 14,
+    paddingBottom: 22,
+  },
   card: {
     borderRadius: 24,
     padding: 24,
@@ -522,11 +547,22 @@ const styles = StyleSheet.create({
     gap: 10,
     marginBottom: 14,
   },
+  summaryRowCompact: {
+    flexWrap: 'wrap',
+  },
   summaryCard: {
     flex: 1,
     borderRadius: 18,
     paddingHorizontal: 14,
     paddingVertical: 12,
+  },
+  summaryCardCompact: {
+    flexBasis: '48%',
+    flexGrow: 0,
+  },
+  summaryCardCompactFull: {
+    flexBasis: '100%',
+    flexGrow: 0,
   },
   summaryLabel: {
     fontSize: 11,

@@ -8,9 +8,20 @@ import { Platform } from 'react-native';
 
 const API_BASE_OVERRIDE_KEY = 'xandoraApiBaseUrl';
 const DEFAULT_HOST = '127.0.0.1';
-export const DEFAULT_API_BASE_URL = `http://${DEFAULT_HOST}:3000/api/v1`;
+export const DEV_LOCAL_API_BASE_URL = `http://${DEFAULT_HOST}:3000/api/v1`;
+export const HOSTED_RENDER_API_BASE_URL = 'https://xandorabackend-44dt.onrender.com/api/v1';
+export const DEFAULT_API_BASE_URL =
+  __DEV__ && Platform.OS === 'android'
+    ? HOSTED_RENDER_API_BASE_URL
+    : __DEV__
+      ? DEV_LOCAL_API_BASE_URL
+      : HOSTED_RENDER_API_BASE_URL;
 export const ANDROID_LOCALHOST_API_BASE_URL = 'http://127.0.0.1:3000/api/v1';
 export const ANDROID_EMULATOR_API_BASE_URL = 'http://10.0.2.2:3000/api/v1';
+
+function isLocalOnlyApiBaseUrl(value: string | null | undefined): boolean {
+  return /127\.0\.0\.1:3000|10\.0\.2\.2:3000/i.test(String(value || ''));
+}
 
 function withProtocol(value: string): string {
   const trimmed = String(value || '').trim();
@@ -56,25 +67,40 @@ function getAndroidFallbackBaseUrl(currentBaseUrl?: string | null): string | nul
   const normalized = String(currentBaseUrl || '').trim();
 
   if (!normalized) {
-    return ANDROID_EMULATOR_API_BASE_URL;
+    return HOSTED_RENDER_API_BASE_URL;
   }
 
   if (normalized.includes('127.0.0.1:3000')) {
-    return ANDROID_EMULATOR_API_BASE_URL;
+    return HOSTED_RENDER_API_BASE_URL;
   }
 
   if (normalized.includes('10.0.2.2:3000')) {
-    return ANDROID_LOCALHOST_API_BASE_URL;
+    return HOSTED_RENDER_API_BASE_URL;
   }
 
   return null;
+}
+
+async function getStoredApiBaseOverride(): Promise<string | null> {
+  const storedValue = await AsyncStorage.getItem(API_BASE_OVERRIDE_KEY);
+  if (!storedValue) {
+    return null;
+  }
+
+  const normalized = normalizeApiBaseUrl(storedValue);
+  if (!__DEV__ && isLocalOnlyApiBaseUrl(normalized)) {
+    await AsyncStorage.removeItem(API_BASE_OVERRIDE_KEY);
+    return null;
+  }
+
+  return normalized;
 }
 
 api.interceptors.request.use(
   async (config: InternalAxiosRequestConfig) => {
     const [token, apiBaseOverride] = await Promise.all([
       AsyncStorage.getItem('authToken'),
-      AsyncStorage.getItem(API_BASE_OVERRIDE_KEY),
+      getStoredApiBaseOverride(),
     ]);
 
     if (token) {
@@ -82,7 +108,7 @@ api.interceptors.request.use(
     }
 
     if (apiBaseOverride) {
-      config.baseURL = normalizeApiBaseUrl(apiBaseOverride);
+      config.baseURL = apiBaseOverride;
     }
 
     return config;
@@ -101,7 +127,7 @@ api.interceptors.response.use(
       return Promise.reject(error);
     }
 
-    const apiBaseOverride = await AsyncStorage.getItem(API_BASE_OVERRIDE_KEY);
+    const apiBaseOverride = await getStoredApiBaseOverride();
     const fallbackBaseUrl = getAndroidFallbackBaseUrl(config.baseURL);
 
     if (apiBaseOverride || !fallbackBaseUrl || fallbackBaseUrl === config.baseURL) {
@@ -123,13 +149,12 @@ export async function clearApiBaseUrl(): Promise<void> {
 }
 
 export async function getConfiguredApiBaseUrl(): Promise<string> {
-  const storedValue = await AsyncStorage.getItem(API_BASE_OVERRIDE_KEY);
-  return storedValue ? normalizeApiBaseUrl(storedValue) : DEFAULT_API_BASE_URL;
+  const storedValue = await getStoredApiBaseOverride();
+  return storedValue || DEFAULT_API_BASE_URL;
 }
 
 export async function getStoredApiBaseUrl(): Promise<string | null> {
-  const storedValue = await AsyncStorage.getItem(API_BASE_OVERRIDE_KEY);
-  return storedValue ? normalizeApiBaseUrl(storedValue) : null;
+  return getStoredApiBaseOverride();
 }
 
 export async function testApiBaseUrl(value: string): Promise<{

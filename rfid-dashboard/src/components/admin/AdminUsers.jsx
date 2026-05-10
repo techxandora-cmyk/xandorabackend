@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+﻿import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { apiDelete, apiGet, apiPost, apiPut } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
@@ -11,7 +11,7 @@ const ROLE_OPTIONS = [
 ];
 
 const GLOBAL_ROLES = new Set(["MASTER_ADMIN", "GLOBAL_ADMIN", "ADMIN"]);
-const PROTECTED_EMAILS = new Set(["admin@zyro.local"]);
+const PROTECTED_EMAILS = new Set(["admin@Xandora.local"]);
 
 function getPrimaryRoleRow(user) {
   const roles = Array.isArray(user?.roles) ? user.roles : [];
@@ -79,11 +79,10 @@ export default function AdminUsers() {
   const [company, setCompany] = useState("");
 
   const [roleDrafts, setRoleDrafts] = useState({});
-  const [companyFilter, setCompanyFilter] = useState("");
+  const [companyFilter, setCompanyFilter] = useState(
+    () => localStorage.getItem("xandora_company_view") || ""
+  );
   const [usersView, setUsersView] = useState("all");
-  const [selectedAccessCompany, setSelectedAccessCompany] = useState("");
-  const [selectedAccessStore, setSelectedAccessStore] = useState("");
-  const [switchingCompany, setSwitchingCompany] = useState(false);
 
   const [resetTargetId, setResetTargetId] = useState(null);
   const [resetPassword, setResetPassword] = useState("");
@@ -147,9 +146,19 @@ export default function AdminUsers() {
       loadStoreOptions();
     }
 
-    window.addEventListener("zyro_stores_updated", handleStoresUpdated);
-    return () => window.removeEventListener("zyro_stores_updated", handleStoresUpdated);
+    window.addEventListener("xandora_stores_updated", handleStoresUpdated);
+    return () => window.removeEventListener("xandora_stores_updated", handleStoresUpdated);
   }, [loadStoreOptions]);
+
+  // Sync company filter when master admin switches company from the top-bar picker
+  useEffect(() => {
+    function syncCompanyFilter() {
+      const cv = localStorage.getItem("xandora_company_view") || "";
+      setCompanyFilter(cv);
+    }
+    window.addEventListener("xandora_company_view_changed", syncCompanyFilter);
+    return () => window.removeEventListener("xandora_company_view_changed", syncCompanyFilter);
+  }, []);
 
   useEffect(() => {
     if (!isMasterAdmin) {
@@ -182,31 +191,6 @@ export default function AdminUsers() {
     () => users.filter((u) => hasRole(u, "HANDHELD_USER")).length,
     [users]
   );
-
-  const companyAccessOptions = useMemo(() => {
-    const map = new Map();
-
-    (storeOptions || [])
-      .filter((store) => store && store.is_active !== false)
-      .forEach((store) => {
-        const companyName = String(store?.company_name || "").trim();
-        const scopedStoreId = String(store?.store_id || "").trim();
-
-        if (!companyName || !scopedStoreId) return;
-
-        if (!map.has(companyName)) {
-          map.set(companyName, new Set());
-        }
-        map.get(companyName).add(scopedStoreId);
-      });
-
-    return Array.from(map.entries())
-      .map(([company_name, storeSet]) => ({
-        company_name,
-        stores: Array.from(storeSet).sort((a, b) => a.localeCompare(b)),
-      }))
-      .sort((a, b) => a.company_name.localeCompare(b.company_name));
-  }, [storeOptions]);
 
   const activeStoreOptions = useMemo(
     () =>
@@ -292,52 +276,6 @@ export default function AdminUsers() {
     });
   }, [users, activeStoresByCompany]);
 
-  const selectedCompanyStores = useMemo(() => {
-    const selected = companyAccessOptions.find(
-      (c) => c.company_name === selectedAccessCompany
-    );
-    return selected?.stores || [];
-  }, [companyAccessOptions, selectedAccessCompany]);
-
-  useEffect(() => {
-    if (!isMasterAdmin) return;
-    if (!companyAccessOptions.length) {
-      setSelectedAccessCompany("");
-      setSelectedAccessStore("");
-      return;
-    }
-
-    const firstCompany = companyAccessOptions[0];
-    if (!selectedAccessCompany) {
-      setSelectedAccessCompany(firstCompany.company_name);
-      setSelectedAccessStore(firstCompany.stores[0] || "");
-      return;
-    }
-
-    const current = companyAccessOptions.find(
-      (c) => c.company_name === selectedAccessCompany
-    );
-
-    if (!current) {
-      setSelectedAccessCompany(firstCompany.company_name);
-      setSelectedAccessStore(firstCompany.stores[0] || "");
-      return;
-    }
-
-    if (
-      selectedAccessStore &&
-      current.stores.includes(selectedAccessStore)
-    ) {
-      return;
-    }
-
-    setSelectedAccessStore(current.stores[0] || "");
-  }, [
-    isMasterAdmin,
-    companyAccessOptions,
-    selectedAccessCompany,
-    selectedAccessStore,
-  ]);
 
   function updateRoleDraft(userId, patch) {
     setRoleDrafts((prev) => ({
@@ -570,35 +508,6 @@ export default function AdminUsers() {
     }
   }
 
-  function switchToCompanyDashboard() {
-    if (!isMasterAdmin) return;
-
-    const targetCompany = String(selectedAccessCompany || "").trim();
-    const targetStore = String(selectedAccessStore || "").trim();
-
-    if (!targetCompany) {
-      setError("Select a company first");
-      return;
-    }
-
-    if (!targetStore) {
-      setError("No store mapped to this company");
-      return;
-    }
-
-    setError("");
-    setSuccess("");
-    setSwitchingCompany(true);
-
-    localStorage.setItem("zyro_company_view", targetCompany);
-    localStorage.setItem("zyro_store_id", targetStore);
-    window.dispatchEvent(new Event("zyro_store_changed"));
-
-    setTimeout(() => {
-      setSwitchingCompany(false);
-      navigate("/", { replace: false });
-    }, 100);
-  }
 
   return (
     <div className="space-y-6">
@@ -704,58 +613,6 @@ export default function AdminUsers() {
       </div>
 
       <div className="glass p-6 rounded-xl">
-        {isMasterAdmin ? (
-          <div className="mb-4 rounded border border-cyan-500/30 bg-cyan-500/5 p-3">
-            <div className="text-sm font-semibold text-cyan-300">Company Access</div>
-            <p className="text-xs opacity-70 mt-1">
-              Pick a company and jump into its store dashboard metrics.
-            </p>
-
-            <div className="mt-3 flex flex-wrap gap-2 items-center">
-              <select
-                className="px-3 py-2 rounded bg-black/40 border border-white/20 text-xs min-w-40"
-                value={selectedAccessCompany}
-                onChange={(e) => setSelectedAccessCompany(e.target.value)}
-              >
-                {companyAccessOptions.length === 0 ? (
-                  <option value="">No companies</option>
-                ) : (
-                  companyAccessOptions.map((c) => (
-                    <option key={c.company_name} value={c.company_name}>
-                      {c.company_name}
-                    </option>
-                  ))
-                )}
-              </select>
-
-              <select
-                className="px-3 py-2 rounded bg-black/40 border border-white/20 text-xs min-w-36"
-                value={selectedAccessStore}
-                onChange={(e) => setSelectedAccessStore(e.target.value)}
-                disabled={!selectedCompanyStores.length}
-              >
-                {selectedCompanyStores.length === 0 ? (
-                  <option value="">No stores</option>
-                ) : (
-                  selectedCompanyStores.map((s) => (
-                    <option key={s} value={s}>
-                      {s}
-                    </option>
-                  ))
-                )}
-              </select>
-
-              <button
-                onClick={switchToCompanyDashboard}
-                disabled={switchingCompany || !selectedAccessCompany || !selectedAccessStore}
-                className="px-3 py-2 rounded border border-cyan-500/50 text-cyan-300 hover:bg-cyan-500/10 disabled:opacity-60 text-xs"
-              >
-                {switchingCompany ? "Opening..." : "Open Company Dashboard"}
-              </button>
-            </div>
-          </div>
-        ) : null}
-
         <div className="flex flex-wrap gap-3 justify-between items-end mb-4">
           <div>
             <h2 className="text-lg font-semibold">All Users</h2>

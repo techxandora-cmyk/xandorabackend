@@ -5,7 +5,7 @@ const outputPath = path.resolve(
   __dirname,
   "..",
   "docs",
-  "Xandora_Pricing_Sheet_Revised.pdf",
+  "xandora_Pricing_Sheet_Revised.pdf",
 );
 
 function escapePdfText(value) {

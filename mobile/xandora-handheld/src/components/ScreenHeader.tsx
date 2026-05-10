@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppTheme } from '../context/ThemeContext';
 
@@ -11,9 +11,17 @@ type ScreenHeaderProps = {
 export default function ScreenHeader({ title, onBack }: ScreenHeaderProps) {
   const { theme } = useAppTheme();
   const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
+  const isCompact = width < 390;
 
   return (
-    <View style={[styles.header, { paddingTop: Math.max(insets.top, 8) }]}>
+    <View
+      style={[
+        styles.header,
+        isCompact && styles.headerCompact,
+        { paddingTop: Math.max(insets.top + 6, 18) },
+      ]}
+    >
       <View style={styles.side}>
         {onBack ? (
           <TouchableOpacity
@@ -34,7 +42,16 @@ export default function ScreenHeader({ title, onBack }: ScreenHeaderProps) {
         ) : null}
       </View>
 
-      <Text style={[styles.title, { color: theme.text }]}>{title}</Text>
+      <Text
+        style={[
+          styles.title,
+          isCompact && styles.titleCompact,
+          { color: theme.text },
+        ]}
+        numberOfLines={1}
+      >
+        {title}
+      </Text>
 
       <View style={[styles.side, styles.rightSide]} />
     </View>
@@ -47,6 +64,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 22,
+  },
+  headerCompact: {
+    marginBottom: 18,
   },
   side: {
     width: 48,
@@ -75,7 +95,9 @@ const styles = StyleSheet.create({
   title: {
     flex: 1,
     textAlign: 'center',
-    fontSize: 24,
     fontWeight: '700',
+  },
+  titleCompact: {
+    fontSize: 21,
   },
 });

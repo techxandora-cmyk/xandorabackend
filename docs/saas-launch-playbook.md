@@ -1,6 +1,6 @@
-# SaaS Launch Playbook (Option 1)
+﻿# SaaS Launch Playbook (Option 1)
 
-Use this path when Zyro is hosted centrally and many customers are served from one platform.
+Use this path when Xandora is hosted centrally and many customers are served from one platform.
 
 ## 1. Infrastructure You Need
 
@@ -55,7 +55,7 @@ Choose one:
 2. Bootstrap from script:
 
 ```bash
-npm run bootstrap:master -- --email admin@zyro.local --password "CHANGE_ME_STRONG" --company Zyro --store STORE_001
+npm run bootstrap:master -- --email admin@Xandora.local --password "CHANGE_ME_STRONG" --company Xandora --store STORE_001
 ```
 
 ## 5. Customer Onboarding Flow (SaaS)
@@ -93,7 +93,7 @@ Backup DB (inside VPS):
 
 ```bash
 docker exec -t $(docker ps --filter name=postgres --format "{{.ID}}" | head -n 1) \
-  pg_dump -U postgres -d rfid > /opt/zyro/backups/rfid_$(date +%Y%m%d_%H%M%S).sql
+  pg_dump -U postgres -d rfid > /opt/Xandora/backups/rfid_$(date +%Y%m%d_%H%M%S).sql
 ```
 
 ## 8. Go-Live Gate

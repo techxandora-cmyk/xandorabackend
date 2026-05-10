@@ -1,4 +1,4 @@
-// src/api/routes/pos.js
+﻿// src/api/routes/pos.js
 const express = require("express");
 const jwt = require("jsonwebtoken");
 const { ensureCatalogTable } = require("./lib/catalogTable");
@@ -136,7 +136,7 @@ module.exports = function buildPosRoutes(pool) {
     const key =
       req.headers["x-pos-key"] ||
       req.headers["x-api-key"] ||
-      req.headers["x-zyro-pos-key"];
+      req.headers["x-xandora-pos-key"];
 
     const expected = process.env.POS_API_KEY;
 

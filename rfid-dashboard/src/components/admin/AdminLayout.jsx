@@ -102,6 +102,28 @@ export default function AdminLayout() {
             Audit
           </NavLink>
         )}
+
+        {isMasterAdmin && (
+          <NavLink
+            to="/admin/readers"
+            className={({ isActive }) =>
+              `${linkBase} ${isActive ? linkActive : linkInactive}`
+            }
+          >
+            Readers
+          </NavLink>
+        )}
+
+        {isMasterAdmin && (
+          <NavLink
+            to="/admin/customer"
+            className={({ isActive }) =>
+              `${linkBase} ${isActive ? linkActive : linkInactive}`
+            }
+          >
+            Customer View
+          </NavLink>
+        )}
       </aside>
 
       <section className="min-h-[400px]">

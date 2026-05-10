@@ -63,7 +63,8 @@ const AUTO_CREATE_CATALOG_FROM_SCANS =
 
 module.exports = function buildScanRoutes(pool) {
   const router = express.Router();
-  const expectedScanKey = process.env.SCAN_API_KEY || "zyro_reader_001";
+  const expectedScanKey = process.env.SCAN_API_KEY || "xandora_reader_001";
+  const { lookupScanToken } = require("./lib/scanTokens");
   let alertColumnsCache = null;
   let alertColumnsCacheTs = 0;
   let alertsUpdatedAtEnsureAttempted = false;
@@ -103,7 +104,7 @@ module.exports = function buildScanRoutes(pool) {
     }
   }
 
-  function allowJwtOrScanKey(req, res, next) {
+  async function allowJwtOrScanKey(req, res, next) {
     const auth = req.headers.authorization;
 
     if (auth && auth.startsWith("Bearer ")) {
@@ -118,13 +119,26 @@ module.exports = function buildScanRoutes(pool) {
     const key =
       req.headers["x-scan-key"] ||
       req.headers["x-api-key"] ||
-      req.headers["x-zyro-scan-key"];
+      req.headers["x-xandora-scan-key"];
 
-    if (!key || key !== expectedScanKey) {
-      return res.status(403).json({
-        ok: false,
-        error: "Forbidden (scan key required)",
-      });
+    if (!key) {
+      return res.status(403).json({ ok: false, error: "Forbidden (scan key required)" });
+    }
+
+    // Token-based auth (st_ / ct_ prefix): validate against DB
+    if (key.startsWith("st_") || key.startsWith("ct_")) {
+      const tokenRow = await lookupScanToken(pool, key).catch(() => null);
+      if (!tokenRow || !tokenRow.is_active) {
+        return res.status(403).json({ ok: false, error: "Forbidden (invalid scan token)" });
+      }
+      // Attach resolved context so downstream handlers can use it
+      req.scanToken = tokenRow;
+      return next();
+    }
+
+    // Legacy env-var key fallback
+    if (key !== expectedScanKey) {
+      return res.status(403).json({ ok: false, error: "Forbidden (scan key required)" });
     }
 
     return next();

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import { apiGet, apiPut } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 
@@ -148,7 +148,7 @@ export default function AdminContracts() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [scope, setScope] = useState(() =>
-    normalizeCompanyView(localStorage.getItem("zyro_company_view") || "")
+    normalizeCompanyView(localStorage.getItem("xandora_company_view") || "")
   );
   const [profiles, setProfiles] = useState([]);
   const [customerCompanies, setCustomerCompanies] = useState([]);
@@ -212,15 +212,15 @@ export default function AdminContracts() {
 
   useEffect(() => {
     function syncScope() {
-      const next = normalizeCompanyView(localStorage.getItem("zyro_company_view") || "");
+      const next = normalizeCompanyView(localStorage.getItem("xandora_company_view") || "");
       setScope((prev) => (prev === next ? prev : next));
     }
 
     window.addEventListener("storage", syncScope);
-    window.addEventListener("zyro_company_view_changed", syncScope);
+    window.addEventListener("xandora_company_view_changed", syncScope);
     return () => {
       window.removeEventListener("storage", syncScope);
-      window.removeEventListener("zyro_company_view_changed", syncScope);
+      window.removeEventListener("xandora_company_view_changed", syncScope);
     };
   }, []);
 

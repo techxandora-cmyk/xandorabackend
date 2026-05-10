@@ -1,4 +1,4 @@
-// src/pages/Devices.jsx
+﻿// src/pages/Devices.jsx
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { apiDelete, apiGet, apiPost, apiPut } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
@@ -311,10 +311,10 @@ async function withTimeout(promise, ms, label = "request") {
 export default function Devices() {
   const { isMasterAdmin } = useAuth();
   const [storeId, setStoreId] = useState(
-    () => resolveStoreId(localStorage.getItem("zyro_store_id"))
+    () => resolveStoreId(localStorage.getItem("xandora_store_id"))
   );
   const [companyView, setCompanyView] = useState(() =>
-    String(localStorage.getItem("zyro_company_view") || "").trim()
+    String(localStorage.getItem("xandora_company_view") || "").trim()
   );
 
   const [devices, setDevices] = useState([]);
@@ -611,9 +611,9 @@ export default function Devices() {
 
   useEffect(() => {
     function onStoreChanged() {
-      const sid = resolveStoreId(localStorage.getItem("zyro_store_id"));
+      const sid = resolveStoreId(localStorage.getItem("xandora_store_id"));
       const nextCompanyView = String(
-        localStorage.getItem("zyro_company_view") || ""
+        localStorage.getItem("xandora_company_view") || ""
       ).trim();
       setCompanyView(nextCompanyView);
       setStoreId(sid);
@@ -624,10 +624,10 @@ export default function Devices() {
 
     // Sync immediately so we don't miss an early store change event from Layout.
     onStoreChanged();
-    window.addEventListener("zyro_store_changed", onStoreChanged);
+    window.addEventListener("xandora_store_changed", onStoreChanged);
     window.addEventListener("storage", onStoreChanged);
     return () => {
-      window.removeEventListener("zyro_store_changed", onStoreChanged);
+      window.removeEventListener("xandora_store_changed", onStoreChanged);
       window.removeEventListener("storage", onStoreChanged);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps

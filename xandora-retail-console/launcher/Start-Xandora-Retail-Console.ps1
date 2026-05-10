@@ -22,7 +22,7 @@ function Open-Browser {
   if ($skipBrowser) {
     return
   }
-  & (Join-Path $PSScriptRoot "Open-Xandora-Retail-Console-Edge.bat")
+  & (Join-Path $PSScriptRoot "Open-xandora-Retail-Console-Edge.bat")
 }
 
 if (-not (Get-Command node -ErrorAction SilentlyContinue)) {

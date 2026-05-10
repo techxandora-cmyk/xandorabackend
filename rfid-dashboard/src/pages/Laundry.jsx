@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { apiGet, apiPost } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 
@@ -153,7 +153,7 @@ export default function Laundry({ view = "dashboard" }) {
   const canManage = isAdmin || isMasterAdmin || hasPermission("dashboard.manage_laundry");
 
   const [storeId, setStoreId] = useState(
-    () => localStorage.getItem("zyro_store_id") || "STORE_001"
+    () => localStorage.getItem("xandora_store_id") || "STORE_001"
   );
   const [filters, setFilters] = useState({ q: "", status: "ALL" });
   const [draft, setDraft] = useState({ q: "", status: "ALL" });
@@ -267,10 +267,10 @@ export default function Laundry({ view = "dashboard" }) {
 
   useEffect(() => {
     function onStoreChanged() {
-      setStoreId(localStorage.getItem("zyro_store_id") || "");
+      setStoreId(localStorage.getItem("xandora_store_id") || "");
     }
-    window.addEventListener("zyro_store_changed", onStoreChanged);
-    return () => window.removeEventListener("zyro_store_changed", onStoreChanged);
+    window.addEventListener("xandora_store_changed", onStoreChanged);
+    return () => window.removeEventListener("xandora_store_changed", onStoreChanged);
   }, []);
 
   useEffect(() => {

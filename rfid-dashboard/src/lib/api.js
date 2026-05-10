@@ -1,4 +1,4 @@
-// src/lib/api.js
+﻿// src/lib/api.js
 import API_BASE from "@/config/api";
 
 const BASE_URL = API_BASE;
@@ -9,8 +9,8 @@ const REQUEST_TIMEOUT_MS = Math.min(
 
 function getToken() {
   return (
-    localStorage.getItem("zyro_jwt") ||
-    sessionStorage.getItem("zyro_jwt")
+    localStorage.getItem("xandora_jwt") ||
+    sessionStorage.getItem("xandora_jwt")
   );
 }
 
@@ -54,7 +54,9 @@ async function request(method, url, body, options = {}) {
   const data = await res.json().catch(() => ({}));
 
   if (!res.ok) {
-    const error = new Error(data?.error || "Request failed");
+    const error = new Error(
+      data?.error || `Request failed with ${res.status} ${res.statusText}`
+    );
     error.status = res.status;
     error.error = data?.error;
     throw error;
@@ -73,6 +75,10 @@ export function apiPost(url, body) {
 
 export function apiPut(url, body) {
   return request("PUT", url, body);
+}
+
+export function apiPatch(url, body) {
+  return request("PATCH", url, body);
 }
 
 export function apiDelete(url) {

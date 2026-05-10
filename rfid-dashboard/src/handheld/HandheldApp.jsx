@@ -1,4 +1,4 @@
-// src/handheld/HandheldApp.jsx
+﻿// src/handheld/HandheldApp.jsx
 import React, { useEffect, useState } from "react";
 import { useAuth } from "@/context/useAuth";
 import API_BASE from "@/config/api";
@@ -10,8 +10,8 @@ import API_BASE from "@/config/api";
 
 function getToken() {
   return (
-    localStorage.getItem("zyro_jwt") ||
-    sessionStorage.getItem("zyro_jwt") ||
+    localStorage.getItem("xandora_jwt") ||
+    sessionStorage.getItem("xandora_jwt") ||
     null
   );
 }

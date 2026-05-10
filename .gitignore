@@ -38,6 +38,10 @@ worker_scan_log.txt
 tmp/
 .logs/
 .gradle-local/
+.gradle-xandora-handheld-debug/
+mobile/xandora-handheld/.gradle-user-home/
+mobile/xandora-handheld/android/app/.cxx/
+mobile/xandora-handheld/android/app/libs/
 
 # Mobile build artifacts
 mobile/xandora-handheld/android/build/

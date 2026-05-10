@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
+﻿import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { apiGet } from "@/lib/api";
 
 function toNum(v) {
@@ -8,7 +8,7 @@ function toNum(v) {
 
 export default function Stock() {
   const [storeId, setStoreId] = useState(
-    () => localStorage.getItem("zyro_store_id") || "STORE_001"
+    () => localStorage.getItem("xandora_store_id") || "STORE_001"
   );
 
   const [q, setQ] = useState("");
@@ -85,12 +85,12 @@ export default function Stock() {
 
   useEffect(() => {
     function onStoreChanged() {
-      const sid = localStorage.getItem("zyro_store_id") || "STORE_001";
+      const sid = localStorage.getItem("xandora_store_id") || "STORE_001";
       setStoreId(sid);
     }
 
-    window.addEventListener("zyro_store_changed", onStoreChanged);
-    return () => window.removeEventListener("zyro_store_changed", onStoreChanged);
+    window.addEventListener("xandora_store_changed", onStoreChanged);
+    return () => window.removeEventListener("xandora_store_changed", onStoreChanged);
   }, []);
 
   function onSubmit(e) {

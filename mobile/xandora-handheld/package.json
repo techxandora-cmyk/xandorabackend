@@ -5,6 +5,8 @@
   "scripts": {
     "android": "react-native run-android",
     "android:dev": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start-android-dev.ps1",
+    "android:release:install": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/install-android-release.ps1",
+    "android:release:rebuild": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/install-android-release.ps1 -Rebuild",
     "android:emulator": "react-native run-android --active-arch-only",
     "ios": "react-native run-ios",
     "lint": "eslint .",

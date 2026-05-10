@@ -1,4 +1,4 @@
-/*
+﻿/*
  * PM2 process file for running multiple RFID readers from one server.
  * Edit READER_HOST / DEVICE_ID / STORE_ID per reader.
  */
@@ -6,8 +6,9 @@
 const sharedEnv = {
   NODE_ENV: "production",
   SCAN_API_KEY: "CHANGE_ME",
-  ZYRO_HOST: "127.0.0.1",
-  ZYRO_PORT: "3000",
+  XANDORA_BASE_URL: "",
+  XANDORA_HOST: "127.0.0.1",
+  XANDORA_PORT: "3000",
   READER_PORT: "5084",
   SCAN_PATH: "/api/v1/scans/batch",
   EVENTS_PATH: "/api/v1/events/ingest",
@@ -22,8 +23,8 @@ const sharedEnv = {
 module.exports = {
   apps: [
     {
-      name: "zyro-reader-store001-pos",
-      script: "./zyro-llrp-bridge.js",
+      name: "xandora-reader-store001-pos",
+      script: "./xandora-llrp-bridge.js",
       cwd: __dirname,
       env: {
         ...sharedEnv,
@@ -36,8 +37,8 @@ module.exports = {
       restart_delay: 2000,
     },
     {
-      name: "zyro-reader-store001-exit",
-      script: "./zyro-llrp-bridge.js",
+      name: "xandora-reader-store001-exit",
+      script: "./xandora-llrp-bridge.js",
       cwd: __dirname,
       env: {
         ...sharedEnv,
@@ -50,8 +51,8 @@ module.exports = {
       restart_delay: 2000,
     },
     {
-      name: "zyro-reader-store001-fitting",
-      script: "./zyro-llrp-bridge.js",
+      name: "xandora-reader-store001-fitting",
+      script: "./xandora-llrp-bridge.js",
       cwd: __dirname,
       env: {
         ...sharedEnv,
@@ -64,8 +65,8 @@ module.exports = {
       restart_delay: 2000,
     },
     {
-      name: "zyro-reader-store001-entrance",
-      script: "./zyro-llrp-bridge.js",
+      name: "xandora-reader-store001-entrance",
+      script: "./xandora-llrp-bridge.js",
       cwd: __dirname,
       env: {
         ...sharedEnv,

@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import POS from "@/pages/POS";
-import Scans from "@/pages/Scans";
 import BillingPanel from "@/components/BillingPanel";
 
 export default function CheckoutOps() {
@@ -13,24 +12,16 @@ export default function CheckoutOps() {
     if (hasPermission("dashboard.view_pos")) {
       items.push({
         id: "pos",
-        label: "POS Checkout",
-        description: "Complete sales and returns from scanned EPCs",
+        label: "Transactions",
+        description: "View sales and returns recorded by your POS system",
       });
     }
 
     if (hasPermission("dashboard.view_billing")) {
       items.push({
         id: "billing",
-        label: "Billing Session",
-        description: "Track expected vs scanned and session accuracy",
-      });
-    }
-
-    if (hasPermission("dashboard.view_recent_scans")) {
-      items.push({
-        id: "scans",
-        label: "Live Scans",
-        description: "Watch incoming RFID reads in real time",
+        label: "Scan Session",
+        description: "Track expected vs scanned items and review session accuracy",
       });
     }
 
@@ -104,7 +95,7 @@ export default function CheckoutOps() {
       {activeTab === "billing" ? (
         <div className="space-y-4">
           <div className="glass rounded-xl p-5 border">
-            <div className="text-sm font-semibold mb-1">Billing Session</div>
+            <div className="text-sm font-semibold mb-1">Scan Session</div>
             <div className="text-xs text-black/60 dark:text-white/50">
               Start sessions, scan EPCs, and review billing history
             </div>
@@ -113,7 +104,6 @@ export default function CheckoutOps() {
         </div>
       ) : null}
 
-      {activeTab === "scans" ? <Scans /> : null}
     </div>
   );
 }

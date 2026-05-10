@@ -1,4 +1,4 @@
-# Multi-Reader Deployment (LAN)
+﻿# Multi-Reader Deployment (LAN)
 
 This project supports multiple readers by running one bridge process per reader.
 
@@ -6,14 +6,14 @@ This project supports multiple readers by running one bridge process per reader.
 
 - Connect all readers to the store LAN switch.
 - Give each reader a static IP.
-- Keep readers and Zyro backend reachable on the same routed network.
+- Keep readers and Xandora backend reachable on the same routed network.
 - Required ports:
   - Reader LLRP: `5084/tcp` from bridge host to reader.
-  - Zyro API: `3000/tcp` from bridge process to backend.
+  - Xandora API: `3000/tcp` from bridge process to backend.
 
 ## 2. Bridge Configuration
 
-`zyro-llrp-bridge.js` is now env-driven.
+`xandora-llrp-bridge.js` is now env-driven.
 
 Required per process:
 
@@ -25,9 +25,12 @@ Required per process:
 Useful optional values:
 
 - `READER_PORT` (default `5084`)
-- `ZYRO_HOST` (default `127.0.0.1`)
-- `ZYRO_PORT` (default `3000`)
+- `XANDORA_BASE_URL` (for hosted backend, for example `https://xandorabackend-44dt.onrender.com`)
+- `XANDORA_HOST` (default `127.0.0.1`)
+- `XANDORA_PORT` (default `3000`)
 - `ZONE_ID` (pos, exit, entrance, changing_room, etc.)
+
+If `XANDORA_BASE_URL` is set, the bridge posts directly to that backend and ignores `XANDORA_HOST` / `XANDORA_PORT`.
 
 ## 3. Run 4 Readers with PM2
 
@@ -56,24 +59,24 @@ pm2 startup
 
 ## 4. Run 4 Readers with systemd
 
-Template unit: `deploy/systemd/zyro-reader@.service`  
+Template unit: `deploy/systemd/xandora-reader@.service`  
 Env template: `deploy/systemd/reader.env.example`
 
 1. Install unit:
 
 ```bash
-sudo cp deploy/systemd/zyro-reader@.service /etc/systemd/system/
+sudo cp deploy/systemd/xandora-reader@.service /etc/systemd/system/
 sudo systemctl daemon-reload
 ```
 
 2. Create env files (one per reader):
 
 ```bash
-sudo mkdir -p /etc/zyro-reader
-sudo cp deploy/systemd/reader.env.example /etc/zyro-reader/store001-pos.env
-sudo cp deploy/systemd/reader.env.example /etc/zyro-reader/store001-exit.env
-sudo cp deploy/systemd/reader.env.example /etc/zyro-reader/store001-fitting.env
-sudo cp deploy/systemd/reader.env.example /etc/zyro-reader/store001-entrance.env
+sudo mkdir -p /etc/xandora-reader
+sudo cp deploy/systemd/reader.env.example /etc/xandora-reader/store001-pos.env
+sudo cp deploy/systemd/reader.env.example /etc/xandora-reader/store001-exit.env
+sudo cp deploy/systemd/reader.env.example /etc/xandora-reader/store001-fitting.env
+sudo cp deploy/systemd/reader.env.example /etc/xandora-reader/store001-entrance.env
 ```
 
 3. Edit each env file for correct `READER_HOST`, `DEVICE_ID`, `STORE_ID`, `ZONE_ID`, `SCAN_API_KEY`.
@@ -81,16 +84,16 @@ sudo cp deploy/systemd/reader.env.example /etc/zyro-reader/store001-entrance.env
 4. Enable/start:
 
 ```bash
-sudo systemctl enable --now zyro-reader@store001-pos
-sudo systemctl enable --now zyro-reader@store001-exit
-sudo systemctl enable --now zyro-reader@store001-fitting
-sudo systemctl enable --now zyro-reader@store001-entrance
+sudo systemctl enable --now xandora-reader@store001-pos
+sudo systemctl enable --now xandora-reader@store001-exit
+sudo systemctl enable --now xandora-reader@store001-fitting
+sudo systemctl enable --now xandora-reader@store001-entrance
 ```
 
 5. Check logs:
 
 ```bash
-journalctl -u zyro-reader@store001-pos -f
+journalctl -u xandora-reader@store001-pos -f
 ```
 
 ## 5. Device IDs and Dashboard

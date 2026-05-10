@@ -1,5 +1,6 @@
-const net = require("net");
+﻿const net = require("net");
 const http = require("http");
+const https = require("https");
 require("dotenv").config();
 
 /* ============================= */
@@ -9,10 +10,8 @@ require("dotenv").config();
 function envInt(name, fallback, min = null, max = null) {
   const raw = process.env[name];
   if (raw == null || raw === "") return fallback;
-
   const parsed = Number(raw);
   if (!Number.isFinite(parsed)) return fallback;
-
   const value = Math.round(parsed);
   if (min != null && value < min) return fallback;
   if (max != null && value > max) return fallback;
@@ -25,15 +24,25 @@ function envPath(name, fallback) {
   return raw.startsWith("/") ? raw : `/${raw}`;
 }
 
+function envUrl(name) {
+  const raw = String(process.env[name] || "").trim();
+  if (!raw) return "";
+  return raw.replace(/\/+$/, "");
+}
+
+// STORE_TOKEN mode: fetch all reader configs from backend and spawn one bridge per reader.
+const STORE_TOKEN = String(process.env.STORE_TOKEN || "").trim();
+
 const READER_HOST = String(process.env.READER_HOST || "192.168.100.50").trim();
 const READER_PORT = envInt("READER_PORT", 5084, 1, 65535);
 
-const ZYRO_HOST = String(process.env.ZYRO_HOST || "127.0.0.1").trim();
-const ZYRO_PORT = envInt("ZYRO_PORT", 3000, 1, 65535);
+const XANDORA_BASE_URL = envUrl("XANDORA_BASE_URL");
+const XANDORA_HOST = String(process.env.XANDORA_HOST || "127.0.0.1").trim();
+const XANDORA_PORT = envInt("XANDORA_PORT", 3000, 1, 65535);
 
 const STORE_ID = String(process.env.STORE_ID || "STORE_001").trim();
 const DEVICE_ID = String(process.env.DEVICE_ID || "FX9600_01").trim();
-const SCAN_KEY = process.env.SCAN_API_KEY || "zyro_reader_001";
+const SCAN_KEY = STORE_TOKEN || process.env.SCAN_API_KEY || "xandora_reader_001";
 const SCAN_PATH = envPath("SCAN_PATH", "/api/v1/scans/batch");
 
 const FLUSH_INTERVAL_MS = envInt("FLUSH_INTERVAL_MS", 1000, 100, 60000);
@@ -46,16 +55,55 @@ const ZONE_ID = process.env.ZONE_ID || "sales_floor";
 const EVENTS_PATH = envPath("EVENTS_PATH", "/api/v1/events/ingest");
 const INSTANCE_ID = `${STORE_ID}:${DEVICE_ID}`;
 
-if (!process.env.READER_HOST) {
-  console.warn(`[bridge ${INSTANCE_ID}] READER_HOST not set. Using default ${READER_HOST}`);
-}
-if (!process.env.DEVICE_ID) {
-  console.warn(`[bridge ${INSTANCE_ID}] DEVICE_ID not set. Using default ${DEVICE_ID}`);
+function getBackendBaseUrl() {
+  if (XANDORA_BASE_URL) {
+    return XANDORA_BASE_URL;
+  }
+
+  return `http://${XANDORA_HOST}:${XANDORA_PORT}`;
 }
 
-console.log(
-  `[bridge ${INSTANCE_ID}] start reader=${READER_HOST}:${READER_PORT} -> zyro=${ZYRO_HOST}:${ZYRO_PORT}${SCAN_PATH}`
-);
+function buildTargetUrl(pathname) {
+  return new URL(pathname, `${getBackendBaseUrl()}/`);
+}
+
+const SCAN_URL = buildTargetUrl(SCAN_PATH);
+const EVENTS_URL = buildTargetUrl(EVENTS_PATH);
+
+const LAUNCHER_MODE = !!(STORE_TOKEN && !process.env.READER_HOST);
+
+if (!LAUNCHER_MODE) {
+  if (!process.env.READER_HOST) {
+    console.warn(`[bridge ${INSTANCE_ID}] READER_HOST not set. Using default ${READER_HOST}`);
+  }
+  if (!process.env.DEVICE_ID) {
+    console.warn(`[bridge ${INSTANCE_ID}] DEVICE_ID not set. Using default ${DEVICE_ID}`);
+  }
+  if (XANDORA_BASE_URL) {
+    console.log(`[bridge ${INSTANCE_ID}] using hosted backend ${XANDORA_BASE_URL}`);
+  }
+  console.log(
+    `[bridge ${INSTANCE_ID}] start reader=${READER_HOST}:${READER_PORT} -> backend=${SCAN_URL.toString()}`
+  );
+} else {
+  console.log(`[bridge launcher] STORE_TOKEN mode — will fetch reader config from ${getBackendBaseUrl()}`);
+}
+
+function requestForUrl(targetUrl, options, onResponse) {
+  const transport = targetUrl.protocol === "https:" ? https : http;
+  return transport.request(
+    {
+      protocol: targetUrl.protocol,
+      hostname: targetUrl.hostname,
+      port:
+        targetUrl.port ||
+        (targetUrl.protocol === "https:" ? 443 : 80),
+      path: `${targetUrl.pathname}${targetUrl.search || ""}`,
+      ...options,
+    },
+    onResponse
+  );
+}
 
 /* ============================= */
 /* LLRP TYPES */
@@ -124,6 +172,7 @@ let noReportTimer = null;
 let lastReportAt = 0;
 let zoneMonitorTimer = null;
 const tagSessions = new Map();
+let emptyReportDebugCount = 0;
 
 /* ============================= */
 /* BASIC BUILDERS */
@@ -538,11 +587,9 @@ function flushTags() {
     items: tags.map((tag) => ({ tag })),
   });
 
-  const req = http.request(
+  const req = requestForUrl(
+    SCAN_URL,
     {
-      hostname: ZYRO_HOST,
-      port: ZYRO_PORT,
-      path: SCAN_PATH,
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -559,7 +606,10 @@ function flushTags() {
 
       res.on("end", () => {
         if (res.statusCode && res.statusCode >= 400) {
-          console.log("Zyro POST failed. Status:", res.statusCode, body || "");
+          console.log(
+            `Backend POST failed ${SCAN_URL.toString()} status=${res.statusCode}`,
+            body || ""
+          );
 
           // Release these tags from local dedupe so they can be retried on next read.
           for (const tag of tags) {
@@ -572,7 +622,7 @@ function flushTags() {
           const parsed = body ? JSON.parse(body) : null;
           if (parsed && typeof parsed.inserted === "number") {
             console.log(
-              `Zyro POST ok. inserted=${parsed.inserted}, duplicates_ignored=${parsed.duplicates_ignored ?? 0}`
+              `Backend POST ok inserted=${parsed.inserted}, duplicates_ignored=${parsed.duplicates_ignored ?? 0}`
             );
           }
         } catch {
@@ -583,7 +633,7 @@ function flushTags() {
   );
 
   req.on("error", (err) => {
-    console.log("Zyro POST error:", err.message);
+    console.log(`Backend POST error ${SCAN_URL.toString()}:`, err.message);
 
     // Requeue unsent tags and release dedupe lock so data is not lost.
     for (const tag of tags) {
@@ -597,7 +647,9 @@ function flushTags() {
   req.write(payload);
   req.end();
 
-  console.log(`[bridge ${INSTANCE_ID}] sent ${tags.length} unique tag(s) to Zyro`);
+  console.log(
+    `[bridge ${INSTANCE_ID}] sent ${tags.length} unique tag(s) to ${SCAN_URL.toString()}`
+  );
 }
 
 function postDecisionEvent(eventType, data) {
@@ -615,10 +667,7 @@ function postDecisionEvent(eventType, data) {
 
   const payload = JSON.stringify(payloadObj);
 
-  const req = http.request({
-    hostname: ZYRO_HOST,
-    port: ZYRO_PORT,
-    path: EVENTS_PATH,
+  const req = requestForUrl(EVENTS_URL, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -628,7 +677,7 @@ function postDecisionEvent(eventType, data) {
   });
 
   req.on("error", (err) => {
-    console.log("Decision event POST error:", err.message);
+    console.log(`Decision event POST error ${EVENTS_URL.toString()}:`, err.message);
   });
 
   req.write(payload);
@@ -793,8 +842,66 @@ function processMessage(message) {
   console.log("Message Type:", type);
 
   switch (type) {
-    case MSG.READER_EVENT_NOTIFICATION:
+    case MSG.READER_EVENT_NOTIFICATION: {
+      // ConnectionAttemptEvent (type 256) is nested inside
+      // ReaderEventNotificationData (type 246). Walk top-level TLVs to find
+      // the container, then walk its payload for the status field.
+      const connStatusNames = {
+        0: "Success",
+        1: "Failed",
+        2: "AnotherConnectionAttempted",
+        3: "AnotherConnectionAttemptedAtMaxLimit",
+      };
+
+      let connStatus = -1;
+      let off2 = 10;
+
+      // Find ReaderEventNotificationData (type 246)
+      while (off2 + 4 <= message.length) {
+        const t2 = message.readUInt16BE(off2) & 0x03ff;
+        const l2 = message.readUInt16BE(off2 + 2);
+        if (l2 < 4 || off2 + l2 > message.length) break;
+
+        if (t2 === 246) {
+          // Walk inside ReaderEventNotificationData
+          let inner = off2 + 4;
+          const innerEnd = off2 + l2;
+          while (inner + 4 <= innerEnd) {
+            const ti = message.readUInt16BE(inner) & 0x03ff;
+            const li = message.readUInt16BE(inner + 2);
+            if (li < 4 || inner + li > innerEnd) break;
+            if (ti === 256 && li >= 6) {
+              connStatus = message.readUInt16BE(inner + 4);
+            }
+            inner += li;
+          }
+          break;
+        }
+
+        off2 += l2;
+      }
+
+      const connStatusName = connStatusNames[connStatus] ?? `Unknown(${connStatus})`;
+
+      if (connStatus !== 0) {
+        console.log(
+          `[bridge ${INSTANCE_ID}] LLRP handshake rejected: ConnectionAttemptEvent status=${connStatus} (${connStatusName}).`
+        );
+        if (connStatus === 2 || connStatus === 3) {
+          console.log(
+            `[bridge ${INSTANCE_ID}] Another LLRP client is already connected to the reader. ` +
+            `Disconnect it via the reader web UI (http://${READER_HOST}) > LLRP, or reboot the reader.`
+          );
+        }
+        break;
+      }
+
+      if (handshakeDone) break;
+      handshakeDone = true;
+      console.log(`[bridge ${INSTANCE_ID}] LLRP handshake ok — starting ROSpec setup`);
+      sendDeleteROSpec();
       break;
+    }
 
     case MSG.KEEPALIVE:
       send(keepAliveAck(), "KEEPALIVE_ACK");
@@ -870,6 +977,14 @@ function processMessage(message) {
       const { epcs, tagReportDataCount } = extractEPCsFromAccessReport(message);
 
       if (!epcs.length) {
+        if (emptyReportDebugCount < 3) {
+          emptyReportDebugCount += 1;
+          console.log(
+            `RO_ACCESS_REPORT raw(${message.length}b): ${message
+              .toString("hex")
+              .toUpperCase()}`
+          );
+        }
         console.log(
           `No EPC in RO_ACCESS_REPORT (TagReportData count: ${tagReportDataCount})`
         );
@@ -901,12 +1016,115 @@ function processMessage(message) {
 }
 
 /* ============================= */
+/* MULTI-READER LAUNCHER */
+/* ============================= */
+
+async function fetchBridgeConfig() {
+  const configUrl = buildTargetUrl("/api/v1/bridge/config");
+  return new Promise((resolve, reject) => {
+    const req = requestForUrl(
+      configUrl,
+      {
+        method: "GET",
+        headers: {
+          "x-store-token": STORE_TOKEN,
+          "Accept": "application/json",
+        },
+      },
+      (res) => {
+        let body = "";
+        res.on("data", (chunk) => (body += chunk));
+        res.on("end", () => {
+          try {
+            const parsed = JSON.parse(body);
+            if (res.statusCode !== 200 || !parsed.ok) {
+              reject(new Error(`config fetch failed (HTTP ${res.statusCode}): ${parsed.error || body}`));
+            } else {
+              resolve(parsed);
+            }
+          } catch (e) {
+            reject(new Error(`config parse error: ${e.message} — body: ${body.slice(0, 200)}`));
+          }
+        });
+      }
+    );
+    req.on("error", reject);
+    req.end();
+  });
+}
+
+async function bootstrapMultiReader() {
+  const { spawn } = require("child_process");
+
+  let config;
+  try {
+    config = await fetchBridgeConfig();
+  } catch (err) {
+    console.error(`[bridge launcher] Failed to fetch config: ${err.message}`);
+    console.error(`[bridge launcher] Retrying in 10s...`);
+    await new Promise((r) => setTimeout(r, 10000));
+    return bootstrapMultiReader();
+  }
+
+  const { readers, store_id, company_name } = config;
+
+  if (!readers || readers.length === 0) {
+    console.error(
+      `[bridge launcher] No active readers registered for this store token (store=${store_id}). Register readers via the admin dashboard first.`
+    );
+    console.error(`[bridge launcher] Retrying in 30s...`);
+    await new Promise((r) => setTimeout(r, 30000));
+    return bootstrapMultiReader();
+  }
+
+  console.log(
+    `[bridge launcher] store=${store_id} company=${company_name} — spawning ${readers.length} reader bridge(s)`
+  );
+
+  for (const reader of readers) {
+    const instanceLabel = `${store_id}:${reader.device_id || reader.reader_ip}`;
+    const childEnv = {
+      ...process.env,
+      READER_HOST: reader.reader_ip,
+      DEVICE_ID: reader.device_id || reader.reader_ip.replace(/\./g, "_"),
+      ZONE_ID: reader.zone_id || "sales_floor",
+      STORE_ID: store_id,
+      // STORE_TOKEN stays set so child uses it as the scan auth key
+    };
+
+    (function spawnChild() {
+      const proc = spawn(process.execPath, [__filename], {
+        env: childEnv,
+        stdio: "inherit",
+      });
+      console.log(
+        `[bridge launcher] child pid=${proc.pid} ip=${reader.reader_ip} device=${reader.device_id} zone=${reader.zone_id}`
+      );
+      proc.on("exit", (code, signal) => {
+        console.log(
+          `[bridge launcher] child ${instanceLabel} (pid=${proc.pid}) exited code=${code} signal=${signal} — restarting in 5s`
+        );
+        setTimeout(spawnChild, 5000);
+      });
+    })();
+  }
+}
+
+/* ============================= */
 /* CONNECT */
 /* ============================= */
+
+// In LLRP the reader must send READER_EVENT_NOTIFICATION with
+// ConnectionAttemptEvent before the client can issue commands.
+// Sending DELETE_ROSPEC on the raw TCP-connect callback races that
+// handshake and causes an ECONNRESET when the reader rejects out-of-order
+// commands (or when it already has a client connected, status != 0).
+let handshakeDone = false;
 
 function connect() {
   llrpState = "connecting";
   incomingBuffer = Buffer.alloc(0);
+  handshakeDone = false;
   stopReportPolling();
   stopNoReportMonitor();
   stopZoneMonitor();
@@ -917,9 +1135,8 @@ function connect() {
 
   socket.connect(READER_PORT, READER_HOST, () => {
     console.log(
-      `[bridge ${INSTANCE_ID}] connected to reader ${READER_HOST}:${READER_PORT}`
+      `[bridge ${INSTANCE_ID}] connected to reader ${READER_HOST}:${READER_PORT} — awaiting LLRP handshake`
     );
-    sendDeleteROSpec();
   });
 
   socket.on("data", handleData);
@@ -950,4 +1167,11 @@ function connect() {
   });
 }
 
-connect();
+if (LAUNCHER_MODE) {
+  bootstrapMultiReader().catch((err) => {
+    console.error("[bridge launcher] Fatal bootstrap error:", err.message);
+    process.exit(1);
+  });
+} else {
+  connect();
+}

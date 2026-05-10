@@ -1,4 +1,4 @@
-// src/components/AlertsPanel.jsx
+﻿// src/components/AlertsPanel.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import { apiGet, apiPost, apiPut } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
@@ -64,7 +64,7 @@ export default function AlertsPanel() {
   const isAdmin = !!auth?.isAdmin || !!auth?.isMasterAdmin;
 
   const [store_id, setStoreId] = useState(
-    () => localStorage.getItem("zyro_store_id") || "STORE_001"
+    () => localStorage.getItem("xandora_store_id") || "STORE_001"
   );
 
   const [alerts, setAlerts] = useState([]);
@@ -213,13 +213,13 @@ export default function AlertsPanel() {
 
   useEffect(() => {
     function onStoreChanged() {
-      const sid = localStorage.getItem("zyro_store_id") || "STORE_001";
+      const sid = localStorage.getItem("xandora_store_id") || "STORE_001";
       setStoreId(sid);
       load(sid);
     }
 
-    window.addEventListener("zyro_store_changed", onStoreChanged);
-    return () => window.removeEventListener("zyro_store_changed", onStoreChanged);
+    window.addEventListener("xandora_store_changed", onStoreChanged);
+    return () => window.removeEventListener("xandora_store_changed", onStoreChanged);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

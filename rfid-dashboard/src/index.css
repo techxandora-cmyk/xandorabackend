@@ -324,40 +324,10 @@ body.glow .glow-border::before {
   color: #0b0b0e;
 }
 
-.light-override :where([class*="text-white"]) {
-  color: #1a263d !important;
-  opacity: 1;
-}
-
-.light-override :where([class*="text-white/"]) {
-  color: #3f5066 !important;
-  opacity: 1;
-}
-
 .light-override :where(.chip, .badge) {
   color: #0f172a !important;
   background: rgba(15, 23, 42, 0.06);
   border-color: rgba(2, 6, 23, 0.12);
-}
-
-.light-override :where([class*="text-rose-"]) {
-  color: #be123c !important;
-  opacity: 1 !important;
-}
-
-.light-override :where([class*="text-amber-"]) {
-  color: #92400e !important;
-  opacity: 1 !important;
-}
-
-.light-override :where([class*="text-cyan-"]) {
-  color: #0e7490 !important;
-  opacity: 1 !important;
-}
-
-.light-override :where([class*="text-violet-"], [class*="text-purple-"]) {
-  color: #5b21b6 !important;
-  opacity: 1 !important;
 }
 
 /* Reduce header blur flicker */
@@ -365,6 +335,240 @@ body.glow .glow-border::before {
   transform: translateZ(0);
   -webkit-transform: translateZ(0);
   will-change: background-color, color;
+}
+
+/* =========================
+   Light mode: fix hardcoded dark-only utilities
+   (components written dark-first; these rules
+    restore readability when .dark is not present)
+========================= */
+
+/* -- Text: white/N shades → legible navy ---------------------- */
+/* Exception: elements that sit ON a solid coloured background    */
+/* (purple/cyan/gradient buttons) must keep white text.          */
+html:not(.dark) [class*="text-white"] {
+  color: #1a263d !important;
+}
+/* Restore white text for elements on solid coloured backgrounds  */
+html:not(.dark) .bg-purple-600,
+html:not(.dark) .bg-purple-600 *,
+html:not(.dark) [class*="brand-btn-primary"],
+html:not(.dark) [class*="brand-module-back-btn"] {
+  color: #f7fbff !important;
+}
+
+/* Coloured text: keep hue but use a darker, high-contrast shade */
+html:not(.dark) [class*="text-rose-"] {
+  color: #9f1239 !important;
+}
+html:not(.dark) [class*="text-amber-"] {
+  color: #92400e !important;
+}
+html:not(.dark) [class*="text-cyan-"] {
+  color: #0e6e87 !important;
+}
+html:not(.dark) [class*="text-emerald-"],
+html:not(.dark) [class*="text-green-"] {
+  color: #065f46 !important;
+}
+html:not(.dark) [class*="text-purple-"],
+html:not(.dark) [class*="text-violet-"] {
+  color: #5b21b6 !important;
+}
+
+/* -- Backgrounds: dark/black fills → very faint tint ---------- */
+html:not(.dark) [class*="bg-black/"] {
+  background-color: rgba(9, 21, 35, 0.04) !important;
+}
+
+/* Low-opacity white fills (progress-bar tracks, hover rings) → visible gray */
+html:not(.dark) [class*="bg-white/1"],
+html:not(.dark) [class*="bg-white/5"],
+html:not(.dark) [class*="bg-white/8"] {
+  background-color: rgba(9, 21, 35, 0.07) !important;
+}
+
+/* -- Borders: white/N → subtle navy outline ------------------- */
+html:not(.dark) [class*="border-white/"] {
+  border-color: rgba(9, 21, 35, 0.12) !important;
+}
+
+/* -- Glass cards: give them a white surface in light mode ------ */
+html:not(.dark) .glass {
+  background-color: rgba(255, 255, 255, 0.82) !important;
+  box-shadow:
+    0 1px 3px rgba(9, 21, 35, 0.06),
+    0 4px 14px rgba(9, 21, 35, 0.05) !important;
+}
+
+/* -- Coloured badge/pill surfaces: lighten them for light bg --- */
+html:not(.dark) [class*="bg-rose-500/"],
+html:not(.dark) [class*="bg-red-500/"] {
+  background-color: rgba(159, 18, 57, 0.08) !important;
+}
+html:not(.dark) [class*="bg-amber-500/"],
+html:not(.dark) [class*="bg-yellow-500/"] {
+  background-color: rgba(146, 64, 14, 0.07) !important;
+}
+html:not(.dark) [class*="bg-cyan-500/"],
+html:not(.dark) [class*="bg-sky-500/"] {
+  background-color: rgba(14, 110, 135, 0.07) !important;
+}
+html:not(.dark) [class*="bg-emerald-500/"],
+html:not(.dark) [class*="bg-green-500/"] {
+  background-color: rgba(6, 95, 70, 0.07) !important;
+}
+html:not(.dark) [class*="bg-purple-500/"],
+html:not(.dark) [class*="bg-violet-500/"] {
+  background-color: rgba(91, 33, 182, 0.07) !important;
+}
+
+/* -- Coloured borders on badges: stronger in light mode -------- */
+html:not(.dark) [class*="border-rose-500/"],
+html:not(.dark) [class*="border-red-500/"] {
+  border-color: rgba(159, 18, 57, 0.35) !important;
+}
+html:not(.dark) [class*="border-amber-500/"],
+html:not(.dark) [class*="border-yellow-500/"] {
+  border-color: rgba(146, 64, 14, 0.35) !important;
+}
+html:not(.dark) [class*="border-cyan-500/"],
+html:not(.dark) [class*="border-sky-500/"] {
+  border-color: rgba(14, 110, 135, 0.35) !important;
+}
+html:not(.dark) [class*="border-emerald-500/"],
+html:not(.dark) [class*="border-green-500/"] {
+  border-color: rgba(6, 95, 70, 0.35) !important;
+}
+html:not(.dark) [class*="border-purple-500/"],
+html:not(.dark) [class*="border-violet-500/"] {
+  border-color: rgba(91, 33, 182, 0.3) !important;
+}
+
+/* -- Progress bars and fill bars ------------------------------- */
+html:not(.dark) [class*="bg-cyan-400/"] {
+  background-color: rgba(14, 110, 135, 0.75) !important;
+}
+html:not(.dark) [class*="bg-purple-500"],
+html:not(.dark) [class*="bg-purple-400/"] {
+  background-color: rgba(91, 33, 182, 0.75) !important;
+}
+html:not(.dark) [class*="bg-emerald-400/"] {
+  background-color: rgba(6, 95, 70, 0.7) !important;
+}
+html:not(.dark) [class*="bg-amber-400/"] {
+  background-color: rgba(146, 64, 14, 0.65) !important;
+}
+
+/* -- Bracket-notation ultra-low white fills (bg-white/[0.03] etc) */
+html:not(.dark) [class*="bg-white/["] {
+  background-color: rgba(9, 21, 35, 0.04) !important;
+}
+
+/* -- Hover states that use white tints — make them a dark tint -- */
+html:not(.dark) [class*="hover:bg-white/"]:hover,
+html:not(.dark) [class*="hover:bg-white/["]:hover {
+  background-color: rgba(9, 21, 35, 0.06) !important;
+}
+
+/* -- Active/selected tab indicators (bg-white/10 used as pill) -- */
+/* These are already caught by [class*="bg-white/1"] above       */
+
+/* -- Form inputs, selects, textareas ---------------------------- */
+html:not(.dark) input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+html:not(.dark) select,
+html:not(.dark) textarea {
+  background-color: #ffffff !important;
+  border-color: rgba(9, 21, 35, 0.18) !important;
+  color: #1a263d !important;
+}
+html:not(.dark) input::placeholder,
+html:not(.dark) textarea::placeholder {
+  color: rgba(9, 21, 35, 0.38) !important;
+}
+
+/* Placeholder via Tailwind variant class on the element */
+html:not(.dark) [class*="placeholder:text-white"] {
+  /* placeholder colour is set via ::placeholder pseudo */
+}
+html:not(.dark) [class*="placeholder:text-white"]::placeholder {
+  color: rgba(9, 21, 35, 0.38) !important;
+}
+
+/* -- Table headers and row dividers ---------------------------- */
+html:not(.dark) thead,
+html:not(.dark) [class*="bg-black/60"],
+html:not(.dark) [class*="bg-black/50"] {
+  background-color: rgba(9, 21, 35, 0.05) !important;
+}
+
+/* -- Specific opacity-muted text: ensure it stays legible ------ */
+/* opacity-N classes are fine on dark text (still readable);
+   but text-white/35 (disabled) and text-white/40 can vanish.
+   Already caught by [class*="text-white"] → #1a263d.
+   Disabled elements get opacity from their own disabled:opacity-N
+   which is intentional fading — leave those alone.              */
+
+/* -- Coloured action buttons that hardcode text-white ---------- */
+/* bg-purple-600 text-white, bg-purple-500 text-white stay white  */
+/* because they are coloured buttons — white text on purple ✓    */
+html:not(.dark) [class*="bg-purple-6"] [class*="text-white"],
+html:not(.dark) [class*="bg-purple-5"] [class*="text-white"],
+html:not(.dark) .bg-purple-600,
+html:not(.dark) .bg-purple-500 {
+  color: #ffffff;
+}
+/* Override the blanket text-white rule for elements that ARE     */
+/* on a coloured (non-white) background — these stay white        */
+html:not(.dark) [class*="bg-purple-6"]:not([class*="bg-purple-6/"]) {
+  color: #ffffff !important;
+}
+
+/* -- Gradient / coloured hero buttons always keep white text --- */
+html:not(.dark) .brand-btn-primary,
+html:not(.dark) .brand-module-back-btn {
+  color: #f7fbff !important;
+}
+
+/* -- Inline badge chips on coloured tints (role badges in nav) - */
+html:not(.dark) [class*="border-red-500/"] [class*="text-red-"],
+html:not(.dark) [class*="border-purple-500/"] [class*="text-purple-"],
+html:not(.dark) [class*="border-cyan-500/"] [class*="text-cyan-"],
+html:not(.dark) [class*="border-blue-500/"] [class*="text-blue-"] {
+  /* colour already overridden by the text-colour rules above */
+}
+
+/* -- Scrollbar in light mode ----------------------------------- */
+html:not(.dark) ::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+html:not(.dark) ::-webkit-scrollbar-track {
+  background: rgba(9, 21, 35, 0.04);
+}
+html:not(.dark) ::-webkit-scrollbar-thumb {
+  background: rgba(9, 21, 35, 0.18);
+  border-radius: 9999px;
+}
+html:not(.dark) ::-webkit-scrollbar-thumb:hover {
+  background: rgba(9, 21, 35, 0.28);
+}
+
+/* =========================
+   Semantic text utilities
+========================= */
+.h1 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: rgb(var(--base-text));
+  line-height: 1.2;
+}
+
+.subtle {
+  font-size: 0.75rem;
+  color: rgb(var(--base-text-muted));
+  line-height: 1.5;
 }
 
 /* =========================

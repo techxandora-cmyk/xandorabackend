@@ -1,6 +1,6 @@
-// src/lib/theme.js
+﻿// src/lib/theme.js
 
-const KEY = "zyro_theme";
+const KEY = "xandora_theme";
 
 export function initTheme() {
   const saved = localStorage.getItem(KEY);

@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+﻿#!/usr/bin/env node
 
 require("dotenv").config();
 const bcrypt = require("bcrypt");
@@ -48,7 +48,7 @@ async function main() {
   const password = String(
     args.password || process.env.BOOTSTRAP_ADMIN_PASSWORD || ""
   );
-  const companyName = String(args.company || "Zyro").trim() || "Zyro";
+  const companyName = String(args.company || "Xandora").trim() || "Xandora";
   const defaultStore = String(args.store || "STORE_001").trim().toUpperCase();
   const requestedProducts = String(
     args.products || process.env.BOOTSTRAP_ADMIN_PRODUCTS || ""

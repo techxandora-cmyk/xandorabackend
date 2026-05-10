@@ -1,4 +1,4 @@
-// src/api/routes/admin.js
+﻿// src/api/routes/admin.js
 const { Router } = require("express");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
@@ -21,6 +21,8 @@ try {
   }
 } catch {}
 
+const { generateStoreToken, generateCompanyToken } = require("./lib/scanTokens");
+
 module.exports = function buildAdminRoutes(pool) {
   const router = Router();
   const USER_MANAGED_ROLES = new Set([
@@ -30,7 +32,7 @@ module.exports = function buildAdminRoutes(pool) {
     "HANDHELD_USER",
   ]);
   const GLOBAL_ROLES = new Set(["ADMIN"]);
-  const PROTECTED_EMAILS = new Set(["admin@zyro.local"]);
+  const PROTECTED_EMAILS = new Set(["admin@Xandora.local"]);
 
   function normalizeStoreIds(rawStoreIds) {
     if (!Array.isArray(rawStoreIds)) return [];
@@ -955,6 +957,7 @@ module.exports = function buildAdminRoutes(pool) {
           [adminUserId, storeIds]
         );
 
+        const storeTokens = {};
         for (const storeId of storeIds) {
           await upsertCompanyStore({
             client,
@@ -964,7 +967,14 @@ module.exports = function buildAdminRoutes(pool) {
             createdByUserId: req.user?.user_id || null,
             isActive: true,
           });
+          storeTokens[storeId] = await generateStoreToken(client, {
+            companyName,
+            storeId,
+            label: storeId,
+          });
         }
+
+        const companyToken = await generateCompanyToken(client, { companyName });
 
         await client.query("COMMIT");
 
@@ -973,6 +983,8 @@ module.exports = function buildAdminRoutes(pool) {
           tenant: {
             company_name: companyName,
             store_ids: storeIds,
+            company_token: companyToken,
+            store_tokens: storeTokens,
           },
           admin: {
             user_id: adminUserId,
@@ -1162,8 +1174,14 @@ module.exports = function buildAdminRoutes(pool) {
         [companyName, normalizedStoreId]
       );
 
+      const storeToken = await generateStoreToken(client, {
+        companyName,
+        storeId: normalizedStoreId,
+        label: normalizedStoreName,
+      });
+
       await client.query("COMMIT");
-      return res.status(201).json({ ok: true, store: createdStore });
+      return res.status(201).json({ ok: true, store: createdStore, store_token: storeToken });
     } catch (e) {
       await client.query("ROLLBACK");
       console.error("[admin/stores/create]", e);
@@ -1354,6 +1372,176 @@ module.exports = function buildAdminRoutes(pool) {
       }
     }
   );
+
+  /* =========================================================
+     SCAN TOKENS (MASTER ADMIN)
+  ========================================================= */
+
+  // GET /tokens?company_name=X  — list tokens (all companies if no filter)
+  router.get("/tokens", authenticate, requireMasterAdmin, async (req, res) => {
+    const companyName = String(req.query.company_name || "").trim();
+    try {
+      const r = companyName
+        ? await pool.query(
+            `SELECT id, token, token_type, company_name, store_id, label, is_active, last_used_at, created_at
+             FROM scan_tokens
+             WHERE company_name = $1
+             ORDER BY token_type DESC, store_id NULLS FIRST, created_at`,
+            [companyName]
+          )
+        : await pool.query(
+            `SELECT id, token, token_type, company_name, store_id, label, is_active, last_used_at, created_at
+             FROM scan_tokens
+             ORDER BY company_name, token_type DESC, store_id NULLS FIRST, created_at`
+          );
+      return res.json({ ok: true, tokens: r.rows });
+    } catch (e) {
+      console.error("[admin/tokens]", e);
+      return res.status(500).json({ ok: false, error: "Failed to load tokens" });
+    }
+  });
+
+  // POST /tokens/rotate  — deactivate current token and generate a new one
+  router.post("/tokens/rotate", authenticate, requireMasterAdmin, async (req, res) => {
+    const { company_name, store_id, token_type } = req.body || {};
+    if (!company_name || !token_type) {
+      return res.status(400).json({ ok: false, error: "company_name and token_type required" });
+    }
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query(
+        `UPDATE scan_tokens SET is_active = FALSE, updated_at = NOW()
+         WHERE company_name = $1
+           AND token_type = $2
+           AND ($3::text IS NULL OR store_id = $3)
+           AND is_active = TRUE`,
+        [company_name, token_type, store_id || null]
+      );
+      let newToken;
+      if (token_type === "store") {
+        newToken = await generateStoreToken(client, { companyName: company_name, storeId: store_id, label: store_id });
+      } else {
+        newToken = await generateCompanyToken(client, { companyName: company_name });
+      }
+      await client.query("COMMIT");
+      return res.json({ ok: true, token: newToken });
+    } catch (e) {
+      await client.query("ROLLBACK");
+      console.error("[admin/tokens/rotate]", e);
+      return res.status(500).json({ ok: false, error: "Failed to rotate token" });
+    } finally {
+      client.release();
+    }
+  });
+
+  /* =========================================================
+     REGISTERED READERS (MASTER ADMIN)
+  ========================================================= */
+
+  // GET /readers?company_name=X&store_id=Y
+  router.get("/readers", authenticate, requireMasterAdmin, async (req, res) => {
+    const companyName = String(req.query.company_name || "").trim();
+    const storeId = String(req.query.store_id || "").trim();
+    try {
+      const r = await pool.query(
+        `SELECT rr.id, rr.device_id, rr.reader_ip, rr.reader_name, rr.zone_id,
+                rr.company_name, rr.store_id, rr.is_active, rr.last_seen_at,
+                st.token AS store_token
+         FROM registered_readers rr
+         JOIN scan_tokens st ON st.id = rr.store_token_id
+         WHERE ($1 = '' OR rr.company_name = $1)
+           AND ($2 = '' OR rr.store_id = $2)
+         ORDER BY rr.company_name, rr.store_id, rr.id`,
+        [companyName, storeId]
+      );
+      return res.json({ ok: true, readers: r.rows });
+    } catch (e) {
+      console.error("[admin/readers]", e);
+      return res.status(500).json({ ok: false, error: "Failed to load readers" });
+    }
+  });
+
+  // POST /readers  — register a new reader
+  router.post("/readers", authenticate, requireMasterAdmin, async (req, res) => {
+    const { company_name, store_id, reader_ip, reader_name, zone_id, device_id } = req.body || {};
+    if (!company_name || !store_id || !reader_ip) {
+      return res.status(400).json({ ok: false, error: "company_name, store_id, reader_ip required" });
+    }
+    const ip = String(reader_ip).trim();
+    const zoneId = String(zone_id || "sales_floor").trim();
+    const name = String(reader_name || ip).trim();
+    const devId = String(device_id || `${store_id}_${ip.replace(/\./g, "_")}`).toUpperCase();
+
+    try {
+      const tokenResult = await pool.query(
+        `SELECT id FROM scan_tokens
+         WHERE token_type = 'store' AND company_name = $1 AND store_id = $2 AND is_active = TRUE
+         LIMIT 1`,
+        [company_name, store_id]
+      );
+      if (!tokenResult.rowCount) {
+        return res.status(404).json({ ok: false, error: "No active store token found for this store" });
+      }
+      const storeTokenId = tokenResult.rows[0].id;
+
+      const r = await pool.query(
+        `INSERT INTO registered_readers
+           (store_token_id, company_name, store_id, device_id, reader_ip, reader_name, zone_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         ON CONFLICT (store_id, reader_ip) DO UPDATE SET
+           reader_name = EXCLUDED.reader_name,
+           zone_id     = EXCLUDED.zone_id,
+           device_id   = EXCLUDED.device_id,
+           is_active   = TRUE,
+           updated_at  = NOW()
+         RETURNING *`,
+        [storeTokenId, company_name, store_id, devId, ip, name, zoneId]
+      );
+      return res.status(201).json({ ok: true, reader: r.rows[0] });
+    } catch (e) {
+      console.error("[admin/readers/create]", e);
+      return res.status(500).json({ ok: false, error: "Failed to register reader" });
+    }
+  });
+
+  // PATCH /readers/:id  — update zone or name
+  router.patch("/readers/:id", authenticate, requireMasterAdmin, async (req, res) => {
+    const id = Number(req.params.id);
+    const { reader_name, zone_id, is_active } = req.body || {};
+    try {
+      const r = await pool.query(
+        `UPDATE registered_readers SET
+           reader_name = COALESCE($2, reader_name),
+           zone_id     = COALESCE($3, zone_id),
+           is_active   = COALESCE($4, is_active),
+           updated_at  = NOW()
+         WHERE id = $1
+         RETURNING *`,
+        [id, reader_name || null, zone_id || null, is_active ?? null]
+      );
+      if (!r.rowCount) return res.status(404).json({ ok: false, error: "Reader not found" });
+      return res.json({ ok: true, reader: r.rows[0] });
+    } catch (e) {
+      console.error("[admin/readers/patch]", e);
+      return res.status(500).json({ ok: false, error: "Failed to update reader" });
+    }
+  });
+
+  // DELETE /readers/:id
+  router.delete("/readers/:id", authenticate, requireMasterAdmin, async (req, res) => {
+    const id = Number(req.params.id);
+    try {
+      const r = await pool.query(
+        `DELETE FROM registered_readers WHERE id = $1 RETURNING id`,
+        [id]
+      );
+      if (!r.rowCount) return res.status(404).json({ ok: false, error: "Reader not found" });
+      return res.json({ ok: true });
+    } catch (e) {
+      return res.status(500).json({ ok: false, error: "Failed to delete reader" });
+    }
+  });
 
   /* =========================================================
      CUSTOMER BILLING PROFILES (MASTER ADMIN)
@@ -2213,8 +2401,8 @@ module.exports = function buildAdminRoutes(pool) {
       await client.query("BEGIN");
 
       const u = await client.query(
-        `INSERT INTO users (email, password_hash, company_name)
-         VALUES ($1, $2, $3)
+        `INSERT INTO users (email, password_hash, company_name, force_password_change)
+         VALUES ($1, $2, $3, TRUE)
          RETURNING id`,
         [email.toLowerCase(), hash, effectiveCompanyName]
       );
@@ -2559,7 +2747,7 @@ module.exports = function buildAdminRoutes(pool) {
         const hash = await bcrypt.hash(password, 10);
 
         await pool.query(
-          `UPDATE users SET password_hash=$1 WHERE id=$2`,
+          `UPDATE users SET password_hash=$1, force_password_change=TRUE, updated_at=NOW() WHERE id=$2`,
           [hash, userId]
         );
 

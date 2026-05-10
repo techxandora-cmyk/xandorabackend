@@ -1,4 +1,4 @@
-// src/components/InventoryPanel.jsx
+﻿// src/components/InventoryPanel.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import { apiGet } from "@/lib/api";
 
@@ -16,7 +16,7 @@ function formatAgo(ms) {
 export default function InventoryPanel() {
   // ✅ ACTIVE STORE comes from Layout dropdown (localStorage)
   const [store_id, setStoreId] = useState(() => {
-    return localStorage.getItem("zyro_store_id") || "STORE_001";
+    return localStorage.getItem("xandora_store_id") || "STORE_001";
   });
 
   const [active, setActive] = useState(null);
@@ -66,14 +66,14 @@ export default function InventoryPanel() {
   // ✅ listen to store dropdown changes (Layout)
   useEffect(() => {
     function onStoreChanged() {
-      const sid = localStorage.getItem("zyro_store_id") || "STORE_001";
+      const sid = localStorage.getItem("xandora_store_id") || "STORE_001";
       setStoreId(sid);
       load(sid);
     }
 
-    window.addEventListener("zyro_store_changed", onStoreChanged);
+    window.addEventListener("xandora_store_changed", onStoreChanged);
     return () =>
-      window.removeEventListener("zyro_store_changed", onStoreChanged);
+      window.removeEventListener("xandora_store_changed", onStoreChanged);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

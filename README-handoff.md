@@ -1,4 +1,4 @@
-# RFID Middleware System - Technical Handoff
+﻿# RFID Middleware System - Technical Handoff
 
 ## Overview
 This repository provides the middleware layer between RFID scanners, POS, and store operations dashboards.
@@ -40,7 +40,7 @@ Core runtime stack:
 - On-prem install (Windows): `npm run onprem:install`
 - On-prem update (Windows): `npm run onprem:update`
 - On-prem backup (Windows): `npm run onprem:backup`
-- Bootstrap master admin on blank DB: `npm run bootstrap:master -- --email admin@zyro.local --password "CHANGE_ME_STRONG"`
+- Bootstrap master admin on blank DB: `npm run bootstrap:master -- --email admin@Xandora.local --password "CHANGE_ME_STRONG"`
 - SaaS stack up (Docker): `npm run saas:up`
 - SaaS stack down (Docker): `npm run saas:down`
 - SaaS logs (Docker): `npm run saas:logs`

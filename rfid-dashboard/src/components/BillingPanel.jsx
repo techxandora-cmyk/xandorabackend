@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+﻿import { useEffect, useMemo, useRef, useState } from "react";
 import { apiGet, apiPost } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 
@@ -77,7 +77,7 @@ export default function BillingPanel() {
   const { isAdmin } = useAuth();
 
   const [storeId, setStoreId] = useState(
-    () => localStorage.getItem("zyro_store_id") || "STORE_001"
+    () => localStorage.getItem("xandora_store_id") || "STORE_001"
   );
   const [expected, setExpected] = useState(10);
   const [session, setSession] = useState(null);
@@ -239,7 +239,7 @@ export default function BillingPanel() {
 
   useEffect(() => {
     function onStoreChanged() {
-      const sid = localStorage.getItem("zyro_store_id") || "STORE_001";
+      const sid = localStorage.getItem("xandora_store_id") || "STORE_001";
       setStoreId(sid);
       storeRef.current = sid;
       setLastValidation(null);
@@ -247,8 +247,8 @@ export default function BillingPanel() {
       loadHistory(sid);
     }
 
-    window.addEventListener("zyro_store_changed", onStoreChanged);
-    return () => window.removeEventListener("zyro_store_changed", onStoreChanged);
+    window.addEventListener("xandora_store_changed", onStoreChanged);
+    return () => window.removeEventListener("xandora_store_changed", onStoreChanged);
   }, []);
 
   const hasActive = session?.status === "ACTIVE" || Boolean(session?.id);

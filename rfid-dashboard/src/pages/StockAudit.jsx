@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+﻿import { useCallback, useEffect, useRef, useState } from "react";
 import { apiGet, apiPost } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 
@@ -101,7 +101,7 @@ export default function StockAudit({ view = "dashboard" }) {
     isAdmin || isMasterAdmin || hasPermission("dashboard.manage_stock_audit");
 
   const [storeId, setStoreId] = useState(
-    () => localStorage.getItem("zyro_store_id") || "STORE_001"
+    () => localStorage.getItem("xandora_store_id") || "STORE_001"
   );
   const [expectedCount, setExpectedCount] = useState("");
   const [history, setHistory] = useState([]);
@@ -226,10 +226,10 @@ export default function StockAudit({ view = "dashboard" }) {
 
   useEffect(() => {
     function onStoreChanged() {
-      setStoreId(localStorage.getItem("zyro_store_id") || "");
+      setStoreId(localStorage.getItem("xandora_store_id") || "");
     }
-    window.addEventListener("zyro_store_changed", onStoreChanged);
-    return () => window.removeEventListener("zyro_store_changed", onStoreChanged);
+    window.addEventListener("xandora_store_changed", onStoreChanged);
+    return () => window.removeEventListener("xandora_store_changed", onStoreChanged);
   }, []);
 
   useEffect(() => {

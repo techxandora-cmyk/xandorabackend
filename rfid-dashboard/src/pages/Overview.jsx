@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { apiGet } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import MasterAdminOverview from "@/pages/MasterAdminOverview";
@@ -74,7 +74,7 @@ function formatClockTime(ts) {
 }
 
 function readActiveStoreId() {
-  return String(localStorage.getItem("zyro_store_id") || "")
+  return String(localStorage.getItem("xandora_store_id") || "")
     .trim()
     .toUpperCase();
 }
@@ -643,12 +643,12 @@ function StoreOverview() {
 
     load();
     intervalId = setInterval(load, 10000);
-    window.addEventListener("zyro_store_changed", onStoreChanged);
+    window.addEventListener("xandora_store_changed", onStoreChanged);
 
     return () => {
       cancelled = true;
       if (intervalId) clearInterval(intervalId);
-      window.removeEventListener("zyro_store_changed", onStoreChanged);
+      window.removeEventListener("xandora_store_changed", onStoreChanged);
     };
   }, []);
 
@@ -756,44 +756,63 @@ function StoreOverview() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       {error ? (
         <div className="rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-300">
           {error}
         </div>
       ) : null}
 
-      <div>
-        <h1 className="text-xl font-semibold">Xandora Control Center</h1>
-        <div className="text-xs opacity-60 mt-1">
-          Real-time RFID orchestration for faster billing, live stock visibility, and safer returns.
+      {/* ── PAGE HEADER ── */}
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-xl font-semibold">Control Center</h1>
+          <div className="text-xs opacity-50 mt-0.5">
+            {activeStoreId ? `${activeStoreId} · ` : ""}
+            Live · updated {formatClockTime(lastUpdatedAt)}
+          </div>
+        </div>
+        <div className="flex items-center gap-3 flex-wrap">
+          <StatusPill
+            label="API"
+            ok={system.apiOnline}
+            okText="Online"
+            offText="Offline"
+          />
+          <StatusPill
+            label={`${system.devicesOnline} device${system.devicesOnline === 1 ? "" : "s"}`}
+            ok={system.devicesOnline > 0}
+            okText="online"
+            offText="offline"
+          />
+          {system.alertsOpen > 0 && (
+            <span className="rounded-full border border-rose-500/50 bg-rose-500/10 px-2.5 py-0.5 text-[11px] text-rose-300">
+              {system.alertsOpen} open alert{system.alertsOpen === 1 ? "" : "s"}
+            </span>
+          )}
         </div>
       </div>
 
-      <Card title="Risk Snapshot">
-        <div className="text-sm">{riskSnapshot}</div>
-        <div className="text-[11px] opacity-65">
-          Updated every 10s for {activeStoreId}. Last updated {formatClockTime(lastUpdatedAt)}.
-        </div>
-        <div className="text-[11px] opacity-65">Data window: 24h sales/scans, 7d no-scan.</div>
-      </Card>
-
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-        <Card title="Shift Progress">
-          <div className="flex items-center justify-between text-xs">
-            <span className="opacity-80">{shiftTargetLabel}</span>
-            <span className="font-semibold">{shiftProgressPct}%</span>
+      {/* ── HERO ROW: the 3 things every manager checks first ── */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        {/* Shift progress — biggest card */}
+        <div className="relative overflow-hidden rounded-xl border glass glow-border p-5 sm:col-span-1">
+          <div className="absolute -right-8 -top-8 h-20 w-20 rounded-full bg-cyan-500/15 blur-2xl pointer-events-none" />
+          <div className="text-xs opacity-60 mb-3">Shift Progress</div>
+          <div className="flex items-end justify-between mb-2">
+            <span className="text-3xl font-bold">{shiftProgressPct}%</span>
+            <span className="text-xs opacity-50 pb-1">{shiftTargetLabel}</span>
           </div>
-          <div className="h-2 rounded-full bg-white/10 overflow-hidden">
+          <div className="h-2.5 rounded-full bg-white/10 overflow-hidden">
             <div
-              className="h-full bg-cyan-400/80 transition-all duration-500"
+              className="h-full bg-cyan-400/80 transition-all duration-700"
               style={{ width: `${shiftProgressPct}%` }}
             />
           </div>
-          <div className="text-[11px] opacity-70">
-            {shiftProcessed} / {shiftTarget} units processed
+          <div className="text-[11px] opacity-55 mt-2">
+            {shiftProcessed} of {shiftTarget} units processed today
           </div>
-        </Card>
+        </div>
 
         <HeroKpi
           title="Revenue Today"
@@ -807,75 +826,61 @@ function StoreOverview() {
         />
       </div>
 
+      {/* ── ACTION ROW: what does the team need to do right now ── */}
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-        <Card title="Top 3 Brands To Check">
+        <Card title="Priority Actions">
+          {firstActions.length === 0 ? (
+            <div className="rounded-lg border border-emerald-500/25 bg-emerald-500/8 px-3 py-2.5 text-xs text-emerald-300">
+              All clear — no urgent actions right now.
+            </div>
+          ) : (
+            <ol className="space-y-2">
+              {firstActions.slice(0, 3).map((step, idx) => (
+                <li
+                  key={`first-action-${idx}`}
+                  className="flex items-start gap-2.5 text-xs"
+                >
+                  <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-purple-500/20 text-[10px] font-semibold text-purple-300">
+                    {idx + 1}
+                  </span>
+                  <span className="leading-5">{step}</span>
+                </li>
+              ))}
+            </ol>
+          )}
+        </Card>
+
+        <Card title="Top Brands to Check">
           {topBrandsToCheck.length === 0 ? (
             <div className="text-xs opacity-50">No priority brands right now.</div>
           ) : (
-            <div className="space-y-1.5">
-              {topBrandsToCheck.map((row) => (
+            <div className="space-y-2">
+              {topBrandsToCheck.map((row, idx) => (
                 <div
                   key={`priority-brand-${row.brand}`}
-                  className="flex items-center justify-between text-xs border border-white/10 rounded px-2 py-1.5"
+                  className="flex items-center justify-between rounded-lg border border-white/10 px-3 py-2 text-xs"
                 >
-                  <span className="font-medium truncate pr-2">{row.brand}</span>
-                  <span className="opacity-80">{row.units} risk units</span>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-amber-500/20 text-[10px] font-semibold text-amber-300">
+                      {idx + 1}
+                    </span>
+                    <span className="font-medium truncate">{row.brand}</span>
+                  </div>
+                  <span className="opacity-70 ml-2 shrink-0">{row.units} risk units</span>
                 </div>
               ))}
             </div>
           )}
         </Card>
-
-        <Card title="Priority Actions">
-          {firstActions.length === 0 ? (
-            <div className="text-xs opacity-50">No urgent actions. Team is clear.</div>
-          ) : (
-            <ol className="list-decimal list-inside space-y-1 text-xs">
-              {firstActions.slice(0, 3).map((step, idx) => (
-                <li key={`first-action-${idx}`}>{step}</li>
-              ))}
-            </ol>
-          )}
-        </Card>
       </div>
 
-      {/* JOURNEY + LIVE TRACKER */}
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
-        <Card title="RFID Journey Funnel (24h)" className="xl:col-span-2">
-          <FunnelStep
-            label="Scanned Tags"
-            value={funnel.scanned}
-            max={funnelMax}
-            tone="cyan"
-          />
-          <FunnelStep
-            label="Bill-Ready (Unsold)"
-            value={funnel.eligible}
-            max={funnelMax}
-            tone="purple"
-          />
-          <FunnelStep
-            label="Sold"
-            value={funnel.sold}
-            max={funnelMax}
-            tone="emerald"
-          />
-          <FunnelStep
-            label="Returned"
-            value={funnel.returned}
-            max={funnelMax}
-            tone="amber"
-          />
-          <div className="text-[11px] opacity-60">
-            Flow: scanned tags -&gt; bill-ready units -&gt; POS sales -&gt; POS returns.
-          </div>
-        </Card>
-
-        <Card title="Live Activity Tracker">
+      {/* ── LIVE ACTIVITY + QUICK KPIs ── */}
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+        <Card title="Live Activity" className="xl:col-span-1">
           {liveActivity.length === 0 ? (
             <div className="text-xs opacity-40">No recent activity yet</div>
           ) : (
-            <div className="space-y-2 max-h-[280px] overflow-auto pr-1">
+            <div className="space-y-2 max-h-[260px] overflow-auto pr-1">
               {liveActivity.map((item) => (
                 <div
                   key={item.id}
@@ -884,12 +889,12 @@ function StoreOverview() {
                   <div className="flex items-center justify-between gap-2">
                     <div className="text-xs font-medium truncate">{item.message}</div>
                     <span
-                      className={`rounded-full border px-2 py-0.5 text-[10px] ${activityToneClass(item.eventType)}`}
+                      className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] ${activityToneClass(item.eventType)}`}
                     >
                       {formatEventType(item.eventType)}
                     </span>
                   </div>
-                  <div className="text-[11px] opacity-60 mt-1">
+                  <div className="text-[11px] opacity-55 mt-0.5">
                     {formatActivityTime(item.ts)}
                   </div>
                 </div>
@@ -897,118 +902,102 @@ function StoreOverview() {
             </div>
           )}
         </Card>
+
+        <div className="xl:col-span-2 grid grid-cols-2 gap-4 content-start">
+          <Kpi
+            title="Total Sales"
+            value={`LKR ${metrics.total_sales_amount || 0}`}
+            trend={trendArrow(metrics.total_sales_amount, prevMetrics?.total_sales_amount)}
+          />
+          <Kpi
+            title="Items Sold"
+            value={metrics.total_items_sold || 0}
+            trend={trendArrow(metrics.total_items_sold, prevMetrics?.total_items_sold)}
+          />
+          <Kpi
+            title="Scan Velocity (24h)"
+            value={metrics.items_scanned_24h || 0}
+            trend={trendArrow(metrics.items_scanned_24h, prevMetrics?.items_scanned_24h)}
+          />
+          <Kpi
+            title="Billing Active"
+            value={system.billingActive ? "Active" : "Idle"}
+            tone={system.billingActive ? "emerald" : "neutral"}
+          />
+        </div>
       </div>
 
-      {/* KPI GRID */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <Kpi
-          title="Total Sales"
-          value={`LKR ${metrics.total_sales_amount || 0}`}
-          trend={trendArrow(
-            metrics.total_sales_amount,
-            prevMetrics?.total_sales_amount
-          )}
-        />
-        <Kpi
-          title="Items Sold"
-          value={metrics.total_items_sold || 0}
-          trend={trendArrow(
-            metrics.total_items_sold,
-            prevMetrics?.total_items_sold
-          )}
-        />
-        <Kpi title="Active Billing" value={system.billingActive ? "YES" : "NO"} />
-        <Kpi
-          title="Scan Velocity (24h)"
-          value={metrics.items_scanned_24h || 0}
-          trend={trendArrow(
-            metrics.items_scanned_24h,
-            prevMetrics?.items_scanned_24h
-          )}
-        />
+      {/* ── DIVIDER: analytics below the fold ── */}
+      <div className="flex items-center gap-3 pt-2">
+        <div className="h-px flex-1 bg-white/8" />
+        <span className="text-[11px] opacity-40 uppercase tracking-widest">Analytics</span>
+        <div className="h-px flex-1 bg-white/8" />
       </div>
 
-      {/* SECOND ROW */}
-      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-4">
-        <Card title="Store Snapshot">
-          <Line label="Devices Online" value={system.devicesOnline} />
-          <Line label="Open Alerts" value={system.alertsOpen} />
-          <Line label="API Status" value={system.apiOnline ? "ONLINE" : "OFFLINE"} />
-        </Card>
-
-        <Card title="System Health">
-          <div className="w-full h-3 bg-white/10 rounded-full overflow-hidden">
-            <div
-              className="h-full bg-purple-500 transition-all duration-500"
-              style={{ width: `${healthScore}%` }}
-            />
-          </div>
-          <div className="text-xs opacity-70 mt-2">
-            Overall Health Score: {healthScore}%
+      {/* ── RFID FUNNEL + SYSTEM HEALTH ── */}
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+        <Card title="RFID Journey Funnel (24h)" className="xl:col-span-2">
+          <FunnelStep label="Scanned Tags" value={funnel.scanned} max={funnelMax} tone="cyan" />
+          <FunnelStep label="Bill-Ready (Unsold)" value={funnel.eligible} max={funnelMax} tone="purple" />
+          <FunnelStep label="Sold" value={funnel.sold} max={funnelMax} tone="emerald" />
+          <FunnelStep label="Returned" value={funnel.returned} max={funnelMax} tone="amber" />
+          <div className="text-[11px] opacity-50">
+            Scanned → bill-ready → POS sales → POS returns
           </div>
         </Card>
 
-        <Card title="Revenue Trend (7d)">
-          <MiniLineChart data={revenueTrend} />
-          {trendBasis !== "none" && (
-            <div className="text-[11px] opacity-50">
-              Source: {trendBasis === "sales" ? "POS Sales" : "Scan Activity"}
+        <div className="space-y-4">
+          <Card title="System Health">
+            <div className="w-full h-3 bg-white/10 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-purple-500 transition-all duration-500"
+                style={{ width: `${healthScore}%` }}
+              />
             </div>
-          )}
-        </Card>
+            <div className="text-xs opacity-60 mt-1.5">Score: {healthScore} / 100</div>
+          </Card>
 
-        <Card title="Store Comparison">
-          {storeComparison.length === 0 ? (
-            <div className="text-xs opacity-40">No comparison data</div>
-          ) : (
-            storeComparison.map((s) => (
-              <div key={s.store_id} className="text-xs">
-                {s.store_id} -{" "}
-                {comparisonBasis === "sales"
-                  ? `LKR ${Number(s.value || 0)}`
-                  : `${Number(s.value || 0)} scans`}
+          <Card title="Revenue Trend (7d)">
+            <MiniLineChart data={revenueTrend} />
+            {trendBasis !== "none" && (
+              <div className="text-[11px] opacity-45 mt-1">
+                {trendBasis === "sales" ? "Based on POS sales" : "Based on scan activity"}
               </div>
-            ))
-          )}
-        </Card>
+            )}
+          </Card>
+        </div>
       </div>
 
-      {/* THIRD ROW */}
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-        <Card title="Top Movers & Dead Stock">
-          <div className="rounded-xl border border-rose-500/40 bg-gradient-to-r from-rose-500/20 via-amber-500/10 to-transparent p-3 space-y-3">
+      {/* ── STOCK INTELLIGENCE ── */}
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+        <Card title="Dead Stock & Top Movers">
+          <div className="rounded-xl border border-rose-500/35 bg-gradient-to-r from-rose-500/15 via-amber-500/8 to-transparent p-3 space-y-2.5">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <div className="text-xs font-semibold text-rose-200">Dead Stock Watch</div>
-                <div className="text-[11px] text-rose-100/80">
-                  Products with inventory but no sell-through.
+                <div className="text-xs font-semibold text-rose-200">Dead Stock</div>
+                <div className="text-[11px] text-rose-100/70">
+                  In stock but no sell-through
                 </div>
               </div>
-              <span className="rounded-full border border-rose-400/50 bg-rose-500/10 px-2 py-0.5 text-xs font-semibold text-rose-200">
+              <span className="rounded-full border border-rose-400/40 bg-rose-500/10 px-2 py-0.5 text-xs font-semibold text-rose-200">
                 {deadStock.length}
               </span>
             </div>
-
             {deadStock.length === 0 ? (
-              <div className="rounded-lg border border-rose-500/20 bg-black/25 px-3 py-2 text-xs text-rose-100/70">
-                No dead stock right now.
-              </div>
+              <div className="text-xs text-rose-100/60">No dead stock right now.</div>
             ) : (
-              <div className="space-y-2">
-                {deadStock.slice(0, 4).map((item) => (
+              <div className="space-y-1.5">
+                {deadStock.slice(0, 3).map((item) => (
                   <div
                     key={`dead-${item.group_key || `${item.sku || ""}-${item.product_name || ""}`}`}
-                    className="rounded-lg border border-rose-500/30 bg-black/35 px-3 py-2"
+                    className="rounded-lg border border-rose-500/25 bg-black/30 px-3 py-2"
                   >
                     <div className="text-xs font-medium truncate text-rose-100">
                       {item.product_name || item.sku || "Unmapped"}
                     </div>
-                    <div className="text-[11px] text-rose-100/75">
-                      {item.brand || "-"} | {item.in_stock_count || 0} stuck in stock
-                    </div>
-                    <div className="text-[11px] text-amber-200/80">
-                      Last scan:{" "}
-                      {item.last_scan_at ? formatActivityTime(item.last_scan_at) : "No scan detected"}
+                    <div className="text-[11px] text-rose-100/65">
+                      {item.brand || "-"} · {item.in_stock_count || 0} stuck in stock ·{" "}
+                      last scan {item.last_scan_at ? formatActivityTime(item.last_scan_at) : "never"}
                     </div>
                   </div>
                 ))}
@@ -1016,12 +1005,12 @@ function StoreOverview() {
             )}
           </div>
 
-          <div className="pt-1">
-            <div className="text-xs font-semibold mb-2 opacity-90">Top Movers</div>
+          <div>
+            <div className="text-xs font-semibold mb-2 opacity-80">Top Movers</div>
             {topMovers.length === 0 ? (
               <div className="text-xs opacity-40">No top movers yet</div>
             ) : (
-              <div className="space-y-2">
+              <div className="space-y-1.5">
                 {topMovers.map((item) => (
                   <div
                     key={item.group_key || `${item.sku || ""}-${item.product_name || ""}`}
@@ -1030,12 +1019,8 @@ function StoreOverview() {
                     <div className="text-xs font-medium truncate">
                       {item.product_name || item.sku || "Unmapped item"}
                     </div>
-                    <div className="text-[11px] opacity-60">
-                      {item.brand || "-"} | Sold {item.sold_count || 0} | In stock{" "}
-                      {item.in_stock_count || 0}
-                    </div>
-                    <div className="text-[11px] text-cyan-300">
-                      Return rate {Number(item.return_rate_pct || 0).toFixed(1)}%
+                    <div className="text-[11px] opacity-55">
+                      {item.brand || "-"} · Sold {item.sold_count || 0} · In stock {item.in_stock_count || 0} · Return rate {Number(item.return_rate_pct || 0).toFixed(1)}%
                     </div>
                   </div>
                 ))}
@@ -1045,53 +1030,67 @@ function StoreOverview() {
         </Card>
 
         <Card title="No-Scan Brand Watchlist">
-          <div className="rounded-lg border border-white/15 bg-black/30 px-3 py-2">
-            <div className="text-xs font-medium">Store team checklist</div>
-            <div className="text-[11px] opacity-70 mt-1">
-              These brands have units not scanned recently. Check placement, tag readability, and floor visibility.
-            </div>
+          <div className="text-[11px] opacity-60 leading-5">
+            Brands with units not scanned in the last 7 days. Check placement, tag readability, and floor visibility.
           </div>
 
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+          <div className="grid grid-cols-3 gap-2">
             <SimpleStatMini
               label="No-Scan Units"
               value={`${dormantUnits}`}
-              hint="Total units not scanned in 7d"
+              hint="Not scanned in 7d"
             />
             <SimpleStatMini
               label="Brands Affected"
               value={`${dormantByBrand.length}`}
-              hint="How many brands need checking"
+              hint="Need checking"
             />
             <SimpleStatMini
-              label="Oldest No-Scan"
+              label="Longest Gap"
               value={`${oldestNoScanDays}d`}
-              hint="Longest scan gap in store"
+              hint="Max days without scan"
             />
           </div>
 
-          <div className="rounded-lg border border-white/10 px-3 py-2">
-            <div className="text-[11px] opacity-80 mb-2">Brands to check now</div>
-            {dormantByBrand.length === 0 ? (
-              <div className="text-xs opacity-50">No dormant brands right now.</div>
-            ) : (
-              <div className="space-y-1.5">
-                {dormantByBrand.map((row) => (
-                  <div
-                    key={`dormant-brand-${row.brand}`}
-                    className="flex items-center justify-between text-xs border border-white/10 rounded px-2 py-1.5"
-                  >
-                    <span className="font-medium truncate pr-2">{row.brand}</span>
-                    <span className="opacity-80 text-right">
-                      {row.units} units | {row.max_days}d no scan
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+          {dormantByBrand.length > 0 && (
+            <div className="space-y-1.5">
+              {dormantByBrand.map((row) => (
+                <div
+                  key={`dormant-brand-${row.brand}`}
+                  className="flex items-center justify-between text-xs border border-white/10 rounded px-2.5 py-1.5"
+                >
+                  <span className="font-medium truncate pr-2">{row.brand}</span>
+                  <span className="opacity-65 shrink-0">{row.units} units · {row.max_days}d</span>
+                </div>
+              ))}
+            </div>
+          )}
+          {dormantByBrand.length === 0 && (
+            <div className="text-xs opacity-45">No dormant brands right now.</div>
+          )}
         </Card>
       </div>
+
+      {/* ── STORE COMPARISON ── */}
+      {storeComparison.length > 0 && (
+        <Card title="Store Comparison">
+          <div className="flex flex-wrap gap-3">
+            {storeComparison.map((s) => (
+              <div
+                key={s.store_id}
+                className="rounded-lg border border-white/10 px-3 py-2 text-xs min-w-[120px]"
+              >
+                <div className="font-medium opacity-80">{s.store_id}</div>
+                <div className="opacity-55 mt-0.5">
+                  {comparisonBasis === "sales"
+                    ? `LKR ${Number(s.value || 0).toLocaleString()}`
+                    : `${Number(s.value || 0)} scans`}
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
     </div>
   );
 }
@@ -1110,15 +1109,36 @@ function HeroKpi({ title, value, hint }) {
   );
 }
 
-function Kpi({ title, value, trend }) {
+function Kpi({ title, value, trend, tone = "neutral" }) {
+  const valueClass =
+    tone === "emerald"
+      ? "text-emerald-300"
+      : tone === "rose"
+      ? "text-rose-300"
+      : "";
   return (
     <div className="p-4 rounded-xl border glass glow-border">
       <div className="text-xs opacity-60 mb-1">{title}</div>
-      <div className="text-lg font-semibold flex items-center gap-2">
+      <div className={`text-lg font-semibold flex items-center gap-2 ${valueClass}`}>
         {value}
         {trend && <span className="text-purple-400 text-sm">{trend}</span>}
       </div>
     </div>
+  );
+}
+
+function StatusPill({ label, ok, okText, offText }) {
+  return (
+    <span
+      className={[
+        "rounded-full border px-2.5 py-0.5 text-[11px]",
+        ok
+          ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
+          : "border-white/20 bg-white/5 text-white/45",
+      ].join(" ")}
+    >
+      {label} {ok ? okText : offText}
+    </span>
   );
 }
 
@@ -1180,22 +1200,22 @@ function SimpleStatMini({ label, value = "-", hint = "" }) {
 export default function Overview() {
   const { isMasterAdmin } = useAuth();
   const [companyView, setCompanyView] = useState(() =>
-    normalizeCompanyView(localStorage.getItem("zyro_company_view") || "")
+    normalizeCompanyView(localStorage.getItem("xandora_company_view") || "")
   );
 
   useEffect(() => {
     function syncCompanyView() {
       const normalized = normalizeCompanyView(
-        localStorage.getItem("zyro_company_view") || ""
+        localStorage.getItem("xandora_company_view") || ""
       );
       setCompanyView((prev) => (prev === normalized ? prev : normalized));
     }
 
     window.addEventListener("storage", syncCompanyView);
-    window.addEventListener("zyro_company_view_changed", syncCompanyView);
+    window.addEventListener("xandora_company_view_changed", syncCompanyView);
     return () => {
       window.removeEventListener("storage", syncCompanyView);
-      window.removeEventListener("zyro_company_view_changed", syncCompanyView);
+      window.removeEventListener("xandora_company_view_changed", syncCompanyView);
     };
   }, []);
 

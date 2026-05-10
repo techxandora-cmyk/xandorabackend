@@ -149,7 +149,9 @@ export default function HomeScreen({ navigation }: any) {
     hasPermission(user, 'dashboard.manage_stock_audit');
   const canLaundryScan =
     hasPermission(user, 'handheld.laundry_scan') ||
-    hasPermission(user, 'handheld.scan_items');
+    hasPermission(user, 'handheld.scan_items') ||
+    hasPermission(user, 'dashboard.view_laundry') ||
+    hasPermission(user, 'dashboard.manage_laundry');
   const canAssignStore = canAssignItems && canOpenAssignStore(user);
   const canItemStatus = selectedProduct.value === 'retail' && canOpenItemStatus(user);
   const canPosValidate =
@@ -402,7 +404,7 @@ export default function HomeScreen({ navigation }: any) {
         key: 'laundry-wash-flow',
         eyebrow: 'Wash Cycle',
         title: 'Wash',
-        subtitle: 'Return dropped-off fabrics to ready stock and record the wash cycle.',
+        subtitle: 'Load fabrics into the washer, then scan them back out to record the cycle and return to stock.',
         icon: '\u{1F30A}',
         accent: MODULE_ACCENTS.laundry,
         onPress: () => navigation.navigate('LaundryWashFlow'),

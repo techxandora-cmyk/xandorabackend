@@ -6,10 +6,11 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import ScreenHeader from '../components/ScreenHeader';
-import { useScanner, useScannerInput } from '../context/ScannerContext';
+import { useScanner } from '../context/ScannerContext';
 import { useAppTheme } from '../context/ThemeContext';
 import { getCurrentStoreId } from '../services/session';
 import {
@@ -39,6 +40,9 @@ const EMPTY_SUMMARY: RetailBillingSummary = {
   read_rate: 0,
 };
 
+const MAX_RECENT_SCANS = 10;
+const RFID_DEDUPE_WINDOW_MS = 6000;
+
 function formatDuration(seconds: unknown): string {
   const total = Math.max(Number(seconds || 0), 0);
   if (!Number.isFinite(total) || total <= 0) return '0s';
@@ -55,6 +59,21 @@ function formatTime(value?: string | null): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return 'Waiting';
   return date.toLocaleTimeString();
+}
+
+function normalizeEpcInput(value: unknown): string {
+  return String(value || '').trim().toUpperCase();
+}
+
+function mergeRecentScan(
+  current: RetailScanRecord[],
+  incoming: RetailScanRecord,
+): RetailScanRecord[] {
+  const normalizedIncomingEpc = normalizeEpcInput(incoming.epc);
+  const remaining = current.filter(
+    row => normalizeEpcInput(row.epc) !== normalizedIncomingEpc,
+  );
+  return [incoming, ...remaining].slice(0, MAX_RECENT_SCANS);
 }
 
 function toneByStatus(status?: string | null) {
@@ -82,6 +101,12 @@ function toneByStatus(status?: string | null) {
         backgroundColor: '#FCE7F3',
         borderColor: '#F9A8D4',
         textColor: '#9D174D',
+      };
+    case 'PENDING':
+      return {
+        backgroundColor: '#F3F4F6',
+        borderColor: '#D1D5DB',
+        textColor: '#6B7280',
       };
     default:
       return {
@@ -130,9 +155,15 @@ function SummaryTile({
 }
 
 export default function PosValidateScreen({ navigation }: any) {
-  const { scannerConnected } = useScanner();
+  const {
+    addScanListener,
+    connectedDevice,
+    scannerConnected,
+    startScanSession,
+    stopScanSession,
+  } = useScanner();
   const { theme } = useAppTheme();
-  const hiddenInputRef = useRef<TextInput>(null);
+  const { width } = useWindowDimensions();
   const [storeId, setStoreId] = useState('');
   const [session, setSession] = useState<RetailBillingSession | null>(null);
   const [summary, setSummary] = useState<RetailBillingSummary>(EMPTY_SUMMARY);
@@ -143,8 +174,41 @@ export default function PosValidateScreen({ navigation }: any) {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [rawScanCount, setRawScanCount] = useState(0);
+  const [lastRawScan, setLastRawScan] = useState('');
+  const latestSessionRef = useRef<RetailBillingSession | null>(null);
+  const sessionIdentityRef = useRef('');
+  const pendingRfidQueueRef = useRef<string[]>([]);
+  const queuedRfidEpcsRef = useRef(new Set<string>());
+  const submittedRfidEpcsRef = useRef(new Set<string>());
+  const recentRfidReadsRef = useRef(new Map<string, number>());
+  const processingRfidQueueRef = useRef(false);
+  const stateRefreshTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const hasActiveSession = String(session?.status || '').toUpperCase() === 'ACTIVE';
+
+  useEffect(() => {
+    latestSessionRef.current = session;
+
+    const nextIdentity = String(session?.session_id || session?.id || '');
+    if (!nextIdentity || sessionIdentityRef.current === nextIdentity) {
+      return;
+    }
+
+    sessionIdentityRef.current = nextIdentity;
+    pendingRfidQueueRef.current = [];
+    queuedRfidEpcsRef.current.clear();
+    submittedRfidEpcsRef.current.clear();
+    recentRfidReadsRef.current.clear();
+  }, [session]);
+
+  useEffect(() => {
+    return () => {
+      if (stateRefreshTimeoutRef.current) {
+        clearTimeout(stateRefreshTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const loadBillingState = useCallback(async () => {
     try {
@@ -183,6 +247,16 @@ export default function PosValidateScreen({ navigation }: any) {
     return () => clearInterval(id);
   }, [hasActiveSession, loadBillingState]);
 
+  const scheduleBillingStateRefresh = useCallback(() => {
+    if (stateRefreshTimeoutRef.current) {
+      clearTimeout(stateRefreshTimeoutRef.current);
+    }
+
+    stateRefreshTimeoutRef.current = setTimeout(() => {
+      loadBillingState().catch(() => undefined);
+    }, 350);
+  }, [loadBillingState]);
+
   const handleStartSession = async () => {
     setBusy(true);
     setError('');
@@ -193,39 +267,174 @@ export default function PosValidateScreen({ navigation }: any) {
       setLastValidation(null);
       await loadBillingState();
     } catch (err: any) {
+      console.log('[PosValidate] start session failed', err?.message, err?.response?.status, err?.response?.data);
       setError(err?.response?.data?.error || err?.message || 'Could not start retail validation');
     } finally {
       setBusy(false);
     }
   };
 
-  const submitEpc = async (rawValue: string) => {
-    const epc = String(rawValue || '').trim().toUpperCase();
+  const submitEpc = useCallback(async (rawValue: string, source: 'manual' | 'rfid' = 'manual') => {
+    const epc = normalizeEpcInput(rawValue);
     if (!epc) {
       setError('Enter or scan an EPC first');
       return;
     }
 
-    if (!hasActiveSession) {
-      setError('Start a POS validation session before scanning EPCs');
-      return;
+    if (source === 'manual') {
+      setBusy(true);
     }
-
-    setBusy(true);
     setError('');
 
     try {
+      if (String(latestSessionRef.current?.status || '').toUpperCase() !== 'ACTIVE') {
+        const nextSession = await startRetailBillingSession(Number(expectedCountInput || 0));
+        latestSessionRef.current = nextSession;
+        setSession(nextSession);
+        setLastValidation(null);
+      }
+
       const result = await scanRetailBillingEpc(epc);
       setLastValidation(result.validation);
       setSession(result.session);
+      latestSessionRef.current = result.session;
       setManualEpc('');
-      await loadBillingState();
+
+      if (result.scan || result.validation) {
+        const now = new Date().toISOString();
+        const incomingScan: RetailScanRecord = {
+          epc,
+          read_count: Number(result.scan?.read_count || 1),
+          device_id: result.scan?.device_id || null,
+          first_seen: result.scan?.first_seen || now,
+          last_seen: result.scan?.last_seen || now,
+          validation_status:
+            result.scan?.validation_status ||
+            result.validation?.validation_status ||
+            null,
+          validation_label:
+            result.scan?.validation_label ||
+            result.validation?.validation_label ||
+            null,
+          validation_message:
+            result.scan?.validation_message ||
+            result.validation?.validation_message ||
+            null,
+          sku: result.scan?.sku || result.validation?.catalog_item?.sku || null,
+          product_name:
+            result.scan?.product_name ||
+            result.validation?.catalog_item?.product_name ||
+            null,
+          price_lkr:
+            result.scan?.price_lkr ??
+            result.validation?.catalog_item?.price_lkr ??
+            null,
+        };
+
+        setScans(current => mergeRecentScan(current, incomingScan));
+      }
+
+      scheduleBillingStateRefresh();
     } catch (err: any) {
+      console.log('[PosValidate] submit EPC failed', epc, err?.message, err?.response?.status, err?.response?.data);
       setError(err?.response?.data?.error || err?.message || 'Could not validate EPC');
+      throw err;
     } finally {
-      setBusy(false);
+      if (source === 'manual') {
+        setBusy(false);
+      }
     }
-  };
+  }, [expectedCountInput, scheduleBillingStateRefresh]);
+
+  const processQueuedRfidScans = useCallback(() => {
+    if (processingRfidQueueRef.current) {
+      return;
+    }
+
+    processingRfidQueueRef.current = true;
+
+    const run = async () => {
+      while (pendingRfidQueueRef.current.length > 0) {
+        // Submit up to 8 EPCs in parallel when session is active; fall back to serial
+        // to avoid a race condition where multiple concurrent calls each try to auto-start the session.
+        const sessionActive =
+          String(latestSessionRef.current?.status || '').toUpperCase() === 'ACTIVE';
+        const batch = pendingRfidQueueRef.current.splice(0, sessionActive ? 8 : 1);
+        batch.forEach(epc => queuedRfidEpcsRef.current.delete(epc));
+
+        await Promise.allSettled(
+          batch.map(async epc => {
+            try {
+              await submitEpc(epc, 'rfid');
+              submittedRfidEpcsRef.current.add(epc);
+            } catch {
+              recentRfidReadsRef.current.delete(epc);
+            }
+          }),
+        );
+      }
+    };
+
+    run()
+      .catch(() => undefined)
+      .finally(() => {
+        processingRfidQueueRef.current = false;
+        if (pendingRfidQueueRef.current.length > 0) {
+          processQueuedRfidScans();
+        }
+      });
+  }, [submitEpc]);
+
+  const queueRfidScan = useCallback((rawValue: string) => {
+    const epc = normalizeEpcInput(rawValue);
+    if (!epc) {
+      return;
+    }
+
+    const now = Date.now();
+    for (const [knownEpc, seenAt] of recentRfidReadsRef.current.entries()) {
+      if (now - seenAt > RFID_DEDUPE_WINDOW_MS) {
+        recentRfidReadsRef.current.delete(knownEpc);
+      }
+    }
+
+    const expectedCount = Number(latestSessionRef.current?.expected_items_count || 0);
+    if (expectedCount > 0 && submittedRfidEpcsRef.current.size >= expectedCount) {
+      return;
+    }
+
+    const lastSeenAt = recentRfidReadsRef.current.get(epc) || 0;
+    if (
+      submittedRfidEpcsRef.current.has(epc) ||
+      queuedRfidEpcsRef.current.has(epc) ||
+      now - lastSeenAt < RFID_DEDUPE_WINDOW_MS
+    ) {
+      return;
+    }
+
+    recentRfidReadsRef.current.set(epc, now);
+    queuedRfidEpcsRef.current.add(epc);
+    pendingRfidQueueRef.current.push(epc);
+
+    // Show the EPC immediately in the list so the user sees it the instant it's scanned.
+    // The validation status fills in once the API call resolves.
+    const nowIso = new Date(now).toISOString();
+    setScans(current => mergeRecentScan(current, {
+      epc,
+      read_count: 1,
+      device_id: null,
+      first_seen: nowIso,
+      last_seen: nowIso,
+      validation_status: 'PENDING',
+      validation_label: 'Validating',
+      validation_message: null,
+      sku: null,
+      product_name: null,
+      price_lkr: null,
+    }));
+
+    processQueuedRfidScans();
+  }, [processQueuedRfidScans]);
 
   const handleComplete = async () => {
     setBusy(true);
@@ -264,29 +473,39 @@ export default function PosValidateScreen({ navigation }: any) {
     ]);
   };
 
-  const focusScanner = () => {
-    if (!scannerConnected) {
-      Alert.alert('Scanner offline', 'Connect the scanner first, then scan into the retail validation session.');
-      return;
-    }
-    hiddenInputRef.current?.focus();
-  };
-
   const latestValidationTone = toneByStatus(lastValidation?.validation_status);
-  const latestScans = useMemo(() => scans.slice(0, 10), [scans]);
+  const latestScans = useMemo(() => scans.slice(0, MAX_RECENT_SCANS), [scans]);
   const sessionStatusText = hasActiveSession ? 'Active session' : 'No active session';
+  const isCompact = width < 390;
 
-  useScannerInput(
-    payload => {
-      submitEpc(payload).catch(() => undefined);
-    },
-    scannerConnected && hasActiveSession,
-  );
+  useEffect(() => {
+    if (!scannerConnected) {
+      return undefined;
+    }
+
+    startScanSession();
+    const unsubscribe = addScanListener(payload => {
+      setRawScanCount(current => current + 1);
+      setLastRawScan(payload);
+      queueRfidScan(payload);
+    });
+
+    return () => {
+      unsubscribe();
+      stopScanSession();
+    };
+  }, [
+    addScanListener,
+    queueRfidScan,
+    scannerConnected,
+    startScanSession,
+    stopScanSession,
+  ]);
 
   return (
     <ScrollView
       style={[styles.screen, { backgroundColor: theme.background }]}
-      contentContainerStyle={styles.content}
+      contentContainerStyle={[styles.content, isCompact && styles.contentCompact]}
       showsVerticalScrollIndicator={false}
     >
       <ScreenHeader
@@ -294,17 +513,6 @@ export default function PosValidateScreen({ navigation }: any) {
         onBack={() =>
           navigation.canGoBack() ? navigation.goBack() : navigation.replace('Home')
         }
-      />
-
-      <TextInput
-        ref={hiddenInputRef}
-        style={styles.hiddenInput}
-        blurOnSubmit={false}
-        showSoftInputOnFocus={false}
-        onSubmitEditing={(event) => {
-          submitEpc(event.nativeEvent.text);
-          hiddenInputRef.current?.clear();
-        }}
       />
 
       <View
@@ -317,14 +525,17 @@ export default function PosValidateScreen({ navigation }: any) {
           },
         ]}
       >
-        <View style={styles.heroTopRow}>
+        <View style={[styles.heroTopRow, isCompact && styles.heroTopRowCompact]}>
           <View>
             <Text style={[styles.eyebrow, { color: theme.textMuted }]}>Retail checkout control</Text>
-            <Text style={[styles.heroTitle, { color: theme.text }]}>Validate EPCs before POS</Text>
+            <Text style={[styles.heroTitle, isCompact && styles.heroTitleCompact, { color: theme.text }]}>
+              Validate EPCs before POS
+            </Text>
           </View>
           <View
             style={[
               styles.statusPill,
+              isCompact && styles.statusPillCompact,
               {
                 backgroundColor: hasActiveSession ? `${theme.accent}22` : theme.surfaceAlt,
                 borderColor: hasActiveSession ? `${theme.accent}55` : theme.border,
@@ -347,7 +558,7 @@ export default function PosValidateScreen({ navigation }: any) {
           workflow: matched, duplicate, already billed, unknown, and validation failed.
         </Text>
 
-        <View style={styles.scopeRow}>
+        <View style={[styles.scopeRow, isCompact && styles.scopeRowCompact]}>
           <View style={[styles.scopeBox, { backgroundColor: theme.surfaceAlt }]}>
             <Text style={[styles.scopeLabel, { color: theme.textMuted }]}>Store</Text>
             <Text style={[styles.scopeValue, { color: theme.text }]}>{storeId || 'No store'}</Text>
@@ -427,16 +638,39 @@ export default function PosValidateScreen({ navigation }: any) {
             </View>
           </View>
 
-          <View style={styles.actionRow}>
-            <TouchableOpacity
-              style={[styles.ghostButton, { backgroundColor: theme.surfaceAlt, borderColor: theme.border }]}
-              onPress={focusScanner}
+          <View
+            style={[
+              styles.readerDebugPanel,
+              {
+                backgroundColor: theme.surfaceAlt,
+                borderColor: theme.border,
+              },
+            ]}
+          >
+            <Text style={[styles.readerDebugLabel, { color: theme.textMuted }]}>Scanner status</Text>
+            <Text style={[styles.readerDebugValue, { color: theme.text }]}>
+              {scannerConnected
+                ? `${connectedDevice?.name || 'Scanner'} connected`
+                : 'Scanner not connected'}
+            </Text>
+            <Text style={[styles.readerDebugMeta, { color: theme.textMuted }]}>
+              Raw RFID events in app: {rawScanCount}
+            </Text>
+            <Text
+              style={[styles.readerDebugMeta, { color: theme.textMuted }]}
+              numberOfLines={1}
             >
-              <Text style={[styles.ghostButtonText, { color: theme.text }]}>Scan With Reader</Text>
-            </TouchableOpacity>
+              Last raw EPC: {lastRawScan || 'Waiting for first read'}
+            </Text>
+          </View>
 
+          <View style={[styles.actionRow, isCompact && styles.actionRowCompact]}>
             <TouchableOpacity
-              style={[styles.secondaryButton, { backgroundColor: busy ? theme.surfaceStrong : theme.success }]}
+              style={[
+                styles.secondaryButton,
+                isCompact && styles.actionButtonCompact,
+                { backgroundColor: busy ? theme.surfaceStrong : theme.success },
+              ]}
               disabled={busy}
               onPress={() => {
                 handleComplete();
@@ -446,18 +680,23 @@ export default function PosValidateScreen({ navigation }: any) {
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={[styles.cancelButton, { backgroundColor: theme.surfaceAlt, borderColor: theme.border }]}
+              style={[
+                styles.cancelButton,
+                isCompact && styles.actionButtonCompact,
+                { backgroundColor: theme.surfaceAlt, borderColor: theme.border },
+              ]}
               onPress={handleCancel}
             >
               <Text style={[styles.cancelButtonText, { color: theme.text }]}>Cancel</Text>
             </TouchableOpacity>
           </View>
 
-          <View style={styles.manualEntryRow}>
+          <View style={[styles.manualEntryRow, isCompact && styles.manualEntryRowCompact]}>
             <TextInput
               style={[
                 styles.textInput,
                 styles.manualInput,
+                isCompact && styles.manualInputCompact,
                 {
                   borderColor: theme.border,
                   color: theme.text,
@@ -470,14 +709,19 @@ export default function PosValidateScreen({ navigation }: any) {
               value={manualEpc}
               onChangeText={setManualEpc}
               onSubmitEditing={() => {
-                submitEpc(manualEpc);
+                submitEpc(manualEpc).catch(() => undefined);
               }}
             />
             <TouchableOpacity
-              style={[styles.primaryButton, styles.submitButton, { backgroundColor: busy ? theme.surfaceStrong : theme.secondary }]}
+              style={[
+                styles.primaryButton,
+                styles.submitButton,
+                isCompact && styles.submitButtonCompact,
+                { backgroundColor: busy ? theme.surfaceStrong : theme.secondary },
+              ]}
               disabled={busy}
               onPress={() => {
-                submitEpc(manualEpc);
+                submitEpc(manualEpc).catch(() => undefined);
               }}
             >
               <Text style={styles.primaryButtonText}>{busy ? 'Checking...' : 'Submit EPC'}</Text>
@@ -570,7 +814,7 @@ export default function PosValidateScreen({ navigation }: any) {
             const tone = toneByStatus(scan.validation_status);
             return (
               <View
-                key={`${scan.epc}-${scan.last_seen || scan.first_seen || 'scan'}`}
+                key={scan.epc}
                 style={[styles.scanRow, { borderColor: theme.border, backgroundColor: theme.surfaceAlt }]}
               >
                 <View style={styles.scanInfo}>
@@ -615,11 +859,9 @@ const styles = StyleSheet.create({
     padding: 16,
     paddingBottom: 28,
   },
-  hiddenInput: {
-    position: 'absolute',
-    width: 1,
-    height: 1,
-    opacity: 0,
+  contentCompact: {
+    paddingHorizontal: 14,
+    paddingBottom: 22,
   },
   heroCard: {
     borderRadius: 24,
@@ -638,6 +880,9 @@ const styles = StyleSheet.create({
     gap: 12,
     marginBottom: 12,
   },
+  heroTopRowCompact: {
+    flexWrap: 'wrap',
+  },
   eyebrow: {
     fontSize: 11,
     fontWeight: '800',
@@ -650,6 +895,10 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     lineHeight: 30,
   },
+  heroTitleCompact: {
+    fontSize: 21,
+    lineHeight: 27,
+  },
   heroHelper: {
     fontSize: 14,
     lineHeight: 21,
@@ -661,6 +910,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
   },
+  statusPillCompact: {
+    alignSelf: 'flex-start',
+  },
   statusPillText: {
     fontSize: 12,
     fontWeight: '800',
@@ -668,6 +920,9 @@ const styles = StyleSheet.create({
   scopeRow: {
     flexDirection: 'row',
     gap: 10,
+  },
+  scopeRowCompact: {
+    flexWrap: 'wrap',
   },
   scopeBox: {
     flex: 1,
@@ -764,36 +1019,63 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '800',
   },
-  ghostButton: {
-    flex: 1,
-    borderRadius: 16,
-    paddingVertical: 14,
-    paddingHorizontal: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-  },
-  ghostButtonText: {
-    fontSize: 13,
-    fontWeight: '800',
-  },
   actionHeader: {
     marginBottom: 16,
+  },
+  readerDebugPanel: {
+    borderRadius: 18,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginBottom: 14,
+  },
+  readerDebugLabel: {
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+    marginBottom: 4,
+  },
+  readerDebugValue: {
+    fontSize: 15,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  readerDebugMeta: {
+    fontSize: 13,
+    lineHeight: 18,
   },
   actionRow: {
     flexDirection: 'row',
     gap: 10,
     marginBottom: 14,
   },
+  actionRowCompact: {
+    flexWrap: 'wrap',
+  },
+  actionButtonCompact: {
+    width: '100%',
+    minWidth: 0,
+    flexBasis: '100%',
+  },
   manualEntryRow: {
     flexDirection: 'row',
     gap: 10,
   },
+  manualEntryRowCompact: {
+    flexDirection: 'column',
+  },
   manualInput: {
     flex: 1,
   },
+  manualInputCompact: {
+    width: '100%',
+  },
   submitButton: {
     minWidth: 112,
+  },
+  submitButtonCompact: {
+    width: '100%',
   },
   summaryGrid: {
     flexDirection: 'row',

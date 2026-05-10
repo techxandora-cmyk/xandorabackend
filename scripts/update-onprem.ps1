@@ -1,4 +1,4 @@
-param(
+﻿param(
   [switch]$WithGitPull,
   [switch]$SkipInstall,
   [switch]$SkipBuild
@@ -64,7 +64,7 @@ try {
   $health = Invoke-WebRequest -UseBasicParsing "http://127.0.0.1:3000/api/health" -TimeoutSec 10
   Write-Host "API health status: $($health.StatusCode)" -ForegroundColor Green
 } catch {
-  Write-Warning "API health check failed. Check logs with: npx pm2 logs zyro-api --lines 100 --nostream"
+  Write-Warning "API health check failed. Check logs with: npx pm2 logs xandora-api --lines 100 --nostream"
 }
 
 Write-Host ""

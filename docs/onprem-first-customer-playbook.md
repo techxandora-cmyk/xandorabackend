@@ -1,6 +1,6 @@
-# On-Prem First Customer Playbook (No Domain)
+﻿# On-Prem First Customer Playbook (No Domain)
 
-Use this when you want to deploy Zyro for your first customer at their site, without cloud hosting.
+Use this when you want to deploy Xandora for your first customer at their site, without cloud hosting.
 
 ## 1. Customer Machine Requirements
 
@@ -55,9 +55,9 @@ npx pm2 status
 View logs:
 
 ```powershell
-npx pm2 logs zyro-api --lines 100 --nostream
-npx pm2 logs zyro-worker --lines 100 --nostream
-npx pm2 logs zyro-dashboard --lines 100 --nostream
+npx pm2 logs xandora-api --lines 100 --nostream
+npx pm2 logs xandora-worker --lines 100 --nostream
+npx pm2 logs xandora-dashboard --lines 100 --nostream
 ```
 
 Health check:

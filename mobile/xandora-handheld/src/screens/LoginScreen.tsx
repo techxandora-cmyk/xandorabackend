@@ -6,6 +6,7 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -29,6 +30,7 @@ import { loginApi } from '../services/authService';
 import { brand } from '../theme/brand';
 
 const LAST_PRODUCT_KEY = 'xandora_mobile_last_product_key';
+const SAVED_CREDENTIALS_KEY = 'xandora_mobile_saved_credentials';
 const HANDHELD_ACCENT = brand.colors.blue;
 const MODULE_SURFACE_LIGHT = '#F4F9FF';
 const MODULE_SURFACE_DARK = '#14253A';
@@ -59,10 +61,12 @@ const MODULE_ACCENTS: Record<
 
 export default function LoginScreen({ navigation }: any) {
   const { theme, mode } = useAppTheme();
+  const { width, height } = useWindowDimensions();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [productKey, setProductKey] = useState<MobileProductKey>(DEFAULT_PRODUCT_KEY);
   const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [error, setError] = useState('');
@@ -74,16 +78,28 @@ export default function LoginScreen({ navigation }: any) {
     'neutral',
   );
   const [serverSubmitting, setServerSubmitting] = useState(false);
+  const isCompactScreen = width < 390 || height < 820;
+  const showServerStatusPanel = showServerSettings || serverStatusKind !== 'neutral';
 
   useEffect(() => {
-    Promise.all([AsyncStorage.getItem(LAST_PRODUCT_KEY), getStoredApiBaseUrl(), getConfiguredApiBaseUrl()])
-      .then(([storedValue, storedApiBaseUrl, configuredApiBaseUrl]) => {
+    Promise.all([AsyncStorage.getItem(LAST_PRODUCT_KEY), AsyncStorage.getItem(SAVED_CREDENTIALS_KEY), getStoredApiBaseUrl(), getConfiguredApiBaseUrl()])
+      .then(([storedValue, savedCredentials, storedApiBaseUrl, configuredApiBaseUrl]) => {
         if (isMobileProductKey(storedValue)) {
           setProductKey(storedValue);
         }
 
+        if (savedCredentials) {
+          try {
+            const creds = JSON.parse(savedCredentials);
+            if (creds?.email) setEmail(creds.email);
+            if (creds?.password) setPassword(creds.password);
+            setRememberMe(true);
+          } catch {}
+        }
+
         const isLocalDemoServer =
           /127\.0\.0\.1:3000|10\.0\.2\.2:3000/i.test(String(configuredApiBaseUrl || ''));
+        const isHostedRenderServer = /onrender\.com/i.test(String(configuredApiBaseUrl || ''));
 
         setServerInput(storedApiBaseUrl || configuredApiBaseUrl);
         setResolvedServer(configuredApiBaseUrl);
@@ -92,11 +108,17 @@ export default function LoginScreen({ navigation }: any) {
             ? `Using saved server ${storedApiBaseUrl}`
             : isLocalDemoServer
             ? `Using local demo server ${configuredApiBaseUrl}`
+            : isHostedRenderServer
+            ? `Using hosted Render server ${configuredApiBaseUrl}`
             : __DEV__
             ? `Using local dev server ${configuredApiBaseUrl}`
             : 'Set your public API server before signing in on another network.',
         );
-        setServerStatusKind(storedApiBaseUrl || __DEV__ || isLocalDemoServer ? 'neutral' : 'error');
+        setServerStatusKind(
+          storedApiBaseUrl || __DEV__ || isLocalDemoServer || isHostedRenderServer
+            ? 'neutral'
+            : 'error',
+        );
       })
       .catch(() => {});
   }, []);
@@ -119,20 +141,29 @@ export default function LoginScreen({ navigation }: any) {
     try {
       const session = await loginApi(email, password, productKey);
       await AsyncStorage.setItem(LAST_PRODUCT_KEY, productKey);
+      if (rememberMe) {
+        await AsyncStorage.setItem(SAVED_CREDENTIALS_KEY, JSON.stringify({ email, password }));
+      } else {
+        await AsyncStorage.removeItem(SAVED_CREDENTIALS_KEY);
+      }
       navigation.replace('Home', {
         username: session.displayName,
       });
     } catch (loginError: any) {
       const status = Number(loginError?.response?.status || loginError?.status || 0);
-      const message =
-        loginError?.response?.data?.error ||
-        loginError?.message ||
-        (status === 401
+      const transportFailure =
+        !loginError?.response && /network error|timeout/i.test(String(loginError?.message || ''));
+      const message = loginError?.response?.data?.error
+        || (status === 401
           ? 'Invalid email or password'
           : status === 403
           ? 'This account is not allowed to open that module'
           : status === 400
           ? 'Check the selected software'
+          : transportFailure
+          ? 'Could not reach the API server. Open API Server, tap Reset, and try again.'
+          : loginError?.message
+          ? String(loginError.message)
           : 'Login failed');
 
       setError(message);
@@ -193,9 +224,15 @@ export default function LoginScreen({ navigation }: any) {
       setServerStatus(
         __DEV__
           ? `Reset to local dev server ${configuredApiBaseUrl}`
+          : /onrender\.com/i.test(String(configuredApiBaseUrl || ''))
+          ? `Reset to hosted Render server ${configuredApiBaseUrl}`
           : 'Server reset. Set your public API server before using this APK outside the local environment.',
       );
-      setServerStatusKind(__DEV__ ? 'neutral' : 'error');
+      setServerStatusKind(
+        __DEV__ || /onrender\.com/i.test(String(configuredApiBaseUrl || ''))
+          ? 'neutral'
+          : 'error',
+      );
     } finally {
       setServerSubmitting(false);
     }
@@ -248,11 +285,11 @@ export default function LoginScreen({ navigation }: any) {
       {showServerSettings ? (
         <View style={styles.serverBody}>
           <Text style={[styles.serverHint, { color: theme.textMuted }]}>
-            Use your public API domain here for APK installs on another phone or network. Example:
-            api.yourdomain.com
+            Use your public API domain here if you want to override the default hosted Render
+            backend. Example: xandorabackend-44dt.onrender.com
           </Text>
           <TextInput
-            placeholder="https://api.yourdomain.com"
+            placeholder="https://xandorabackend-44dt.onrender.com"
             placeholderTextColor={theme.textMuted}
             style={[
               styles.serverInput,
@@ -303,7 +340,7 @@ export default function LoginScreen({ navigation }: any) {
         </View>
       ) : null}
 
-      {serverStatus ? (
+      {showServerStatusPanel && serverStatus ? (
         <View
           style={[
             styles.serverStatusBox,
@@ -328,7 +365,10 @@ export default function LoginScreen({ navigation }: any) {
     >
       <ScrollView
         style={[styles.screen, { backgroundColor: theme.background }]}
-        contentContainerStyle={styles.screenContent}
+        contentContainerStyle={[
+          styles.screenContent,
+          isCompactScreen && styles.screenContentCompact,
+        ]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
@@ -363,6 +403,7 @@ export default function LoginScreen({ navigation }: any) {
       <View
         style={[
           styles.card,
+          isCompactScreen && styles.cardCompact,
           {
             backgroundColor: mode === 'dark' ? theme.cardDark : theme.surfaceRaised,
             borderColor: mode === 'dark' ? theme.cardDarkBorder : theme.accentSoft,
@@ -388,17 +429,21 @@ export default function LoginScreen({ navigation }: any) {
             </TouchableOpacity>
 
             <View style={styles.brandWrapCompact}>
-              <BrandMark size="sm" light={mode === 'dark'} subtitle={false} />
+              <BrandMark
+                size={isCompactScreen ? 'xs' : 'sm'}
+                light={mode === 'dark'}
+                subtitle={false}
+              />
             </View>
 
             <View style={[styles.stepChip, { backgroundColor: selectedAccent.softTint }]}>
               <Text style={[styles.stepChipText, { color: selectedAccent.tint }]}>Step 2</Text>
             </View>
 
-            <Text style={[styles.title, { color: theme.text }]}>
+            <Text style={[styles.title, isCompactScreen && styles.titleCompact, { color: theme.text }]}>
               Sign in to {selectedProduct.label}
             </Text>
-            <Text style={[styles.subtitle, { color: theme.textMuted }]}>
+            <Text style={[styles.subtitle, isCompactScreen && styles.subtitleCompact, { color: theme.textMuted }]}>
               {selectedProduct.summary}
             </Text>
 
@@ -479,6 +524,17 @@ export default function LoginScreen({ navigation }: any) {
               <Text style={[styles.showText, { color: theme.textMuted }]}>
                 Show password
               </Text>
+              <TouchableOpacity
+                style={[styles.checkbox, { borderColor: theme.accent, marginLeft: 18 }]}
+                onPress={() => setRememberMe(!rememberMe)}
+              >
+                {rememberMe ? (
+                  <View style={[styles.checked, { backgroundColor: theme.accent }]} />
+                ) : null}
+              </TouchableOpacity>
+              <Text style={[styles.showText, { color: theme.textMuted }]}>
+                Remember me
+              </Text>
             </View>
 
             <TouchableOpacity
@@ -505,19 +561,25 @@ export default function LoginScreen({ navigation }: any) {
         ) : (
           <View>
             <View style={styles.brandWrap}>
-              <BrandMark size="md" light={mode === 'dark'} subtitle={false} />
+              <BrandMark
+                size={isCompactScreen ? 'sm' : 'md'}
+                light={mode === 'dark'}
+                subtitle={false}
+              />
             </View>
 
             <View style={[styles.stepChip, { backgroundColor: selectedAccent.softTint }]}>
               <Text style={[styles.stepChipText, { color: selectedAccent.tint }]}>Step 1</Text>
             </View>
 
-            <Text style={[styles.title, { color: theme.text }]}>Select your workspace</Text>
-            <Text style={[styles.subtitle, { color: theme.textMuted }]}>
+            <Text style={[styles.title, isCompactScreen && styles.titleCompact, { color: theme.text }]}>
+              Select your workspace
+            </Text>
+            <Text style={[styles.subtitle, isCompactScreen && styles.subtitleCompact, { color: theme.textMuted }]}>
               Choose the Xandora module first, then continue into the right sign-in flow.
             </Text>
 
-            <View style={styles.moduleList}>
+            <View style={[styles.moduleList, isCompactScreen && styles.moduleListCompact]}>
               {SOFTWARE_OPTIONS.map((option) => {
                 const active = option.value === productKey;
                 const accent = MODULE_ACCENTS[option.value];
@@ -526,6 +588,7 @@ export default function LoginScreen({ navigation }: any) {
                     key={option.value}
                     style={[
                       styles.moduleCard,
+                      isCompactScreen && styles.moduleCardCompact,
                       {
                         backgroundColor: active
                           ? mode === 'dark'
@@ -595,6 +658,7 @@ export default function LoginScreen({ navigation }: any) {
                     <Text
                       style={[
                         styles.moduleSummary,
+                        isCompactScreen && styles.moduleSummaryCompact,
                         {
                           color:
                             active && mode === 'dark'
@@ -606,19 +670,21 @@ export default function LoginScreen({ navigation }: any) {
                       {option.summary}
                     </Text>
 
-                    <Text
-                      style={[
-                        styles.moduleHelper,
-                        {
-                          color:
-                            active && mode === 'dark'
-                              ? 'rgba(255,255,255,0.52)'
-                              : theme.textMuted,
-                        },
-                      ]}
-                    >
-                      {option.helper}
-                    </Text>
+                    {!isCompactScreen ? (
+                      <Text
+                        style={[
+                          styles.moduleHelper,
+                          {
+                            color:
+                              active && mode === 'dark'
+                                ? 'rgba(255,255,255,0.52)'
+                                : theme.textMuted,
+                          },
+                        ]}
+                      >
+                        {option.helper}
+                      </Text>
+                    ) : null}
 
                     <View style={styles.moduleFooter}>
                       <View
@@ -677,6 +743,11 @@ const styles = StyleSheet.create({
     paddingTop: 20,
     paddingBottom: 28,
   },
+  screenContentCompact: {
+    paddingHorizontal: 14,
+    paddingTop: 12,
+    paddingBottom: 20,
+  },
   glowOne: {
     position: 'absolute',
     width: 220,
@@ -710,6 +781,10 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 10 },
     elevation: 5,
   },
+  cardCompact: {
+    borderRadius: 24,
+    padding: 16,
+  },
   brandWrap: {
     marginBottom: 22,
     alignItems: 'center',
@@ -737,13 +812,25 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 10,
   },
+  titleCompact: {
+    fontSize: 22,
+    marginBottom: 8,
+  },
   subtitle: {
     textAlign: 'center',
     lineHeight: 22,
     marginBottom: 20,
   },
+  subtitleCompact: {
+    fontSize: 13,
+    lineHeight: 19,
+    marginBottom: 16,
+  },
   moduleList: {
     gap: 12,
+  },
+  moduleListCompact: {
+    gap: 10,
   },
   moduleCard: {
     position: 'relative',
@@ -755,6 +842,11 @@ const styles = StyleSheet.create({
     shadowRadius: 16,
     shadowOffset: { width: 0, height: 8 },
     elevation: 4,
+  },
+  moduleCardCompact: {
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
   },
   moduleCardTop: {
     flexDirection: 'row',
@@ -794,6 +886,11 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 21,
     marginBottom: 10,
+  },
+  moduleSummaryCompact: {
+    fontSize: 13,
+    lineHeight: 18,
+    marginBottom: 12,
   },
   moduleHelper: {
     fontSize: 12,

@@ -1,0 +1,73 @@
+name: Release Android APK
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-apk:
+    name: Build & Publish Release APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: mobile/xandora-handheld/package-lock.json
+
+      - name: Install mobile dependencies
+        working-directory: mobile/xandora-handheld
+        run: npm ci
+
+      - name: Install Android NDK and build tools
+        run: |
+          yes | sdkmanager "ndk;27.1.12297006" "build-tools;36.0.0" 2>/dev/null || true
+
+      - name: Decode release keystore
+        run: |
+          echo "${{ secrets.XANDORA_RELEASE_KEYSTORE_BASE64 }}" | base64 --decode \
+            > ${{ github.workspace }}/mobile/xandora-handheld/android/app/xandora-release.keystore
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ hashFiles('mobile/xandora-handheld/android/**/*.gradle*', 'mobile/xandora-handheld/android/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: gradle-
+
+      - name: Grant Gradle execute permission
+        run: chmod +x mobile/xandora-handheld/android/gradlew
+
+      - name: Build release APK
+        working-directory: mobile/xandora-handheld/android
+        env:
+          XANDORA_RELEASE_STORE_FILE: ${{ github.workspace }}/mobile/xandora-handheld/android/app/xandora-release.keystore
+          XANDORA_RELEASE_STORE_PASSWORD: ${{ secrets.XANDORA_RELEASE_STORE_PASSWORD }}
+          XANDORA_RELEASE_KEY_ALIAS: ${{ secrets.XANDORA_RELEASE_KEY_ALIAS }}
+          XANDORA_RELEASE_KEY_PASSWORD: ${{ secrets.XANDORA_RELEASE_KEY_PASSWORD }}
+        run: ./gradlew assembleRelease --no-daemon
+
+      - name: Stage APK for release
+        run: |
+          cp mobile/xandora-handheld/android/app/build/outputs/apk/release/app-release.apk \
+            xandora-handheld.apk
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: xandora-handheld.apk
+          generate_release_notes: true

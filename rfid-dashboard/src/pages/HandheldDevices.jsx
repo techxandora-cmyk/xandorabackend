@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+﻿import { useCallback, useEffect, useMemo, useState } from "react";
 import { apiDelete, apiGet, apiPost, apiPut } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 
@@ -186,7 +186,7 @@ export default function HandheldDevices({ moduleKey = "laundry" }) {
     isAdmin || isMasterAdmin || hasPermission(config.managePermission);
 
   const [storeId, setStoreId] = useState(
-    () => localStorage.getItem("zyro_store_id") || "STORE_001"
+    () => localStorage.getItem("xandora_store_id") || "STORE_001"
   );
   const [devices, setDevices] = useState([]);
   const [draftsById, setDraftsById] = useState({});
@@ -251,10 +251,10 @@ export default function HandheldDevices({ moduleKey = "laundry" }) {
 
   useEffect(() => {
     function onStoreChanged() {
-      setStoreId(localStorage.getItem("zyro_store_id") || "");
+      setStoreId(localStorage.getItem("xandora_store_id") || "");
     }
-    window.addEventListener("zyro_store_changed", onStoreChanged);
-    return () => window.removeEventListener("zyro_store_changed", onStoreChanged);
+    window.addEventListener("xandora_store_changed", onStoreChanged);
+    return () => window.removeEventListener("xandora_store_changed", onStoreChanged);
   }, []);
 
   function patchDraft(deviceId, patch) {

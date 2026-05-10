@@ -1,12 +1,12 @@
-import { useState } from "react";
+﻿import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { apiPost } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { initTheme } from "@/lib/theme";
 import XandoraLockupLogo from "@/components/XandoraLockupLogo";
 
-const RECENT_EMAILS_KEY = "zyro_recent_emails";
-const LAST_PRODUCT_KEY = "zyro_last_product_key";
+const RECENT_EMAILS_KEY = "xandora_recent_emails";
+const LAST_PRODUCT_KEY = "xandora_last_product_key";
 const PRODUCT_KEY_ALIASES = {
   jewellery: "stock_audit",
   jewelry: "stock_audit",
@@ -256,11 +256,11 @@ export default function Login() {
                     </label>
                     <input
                       id="login-email"
-                      type="email"
+                      type="text"
                       name="email"
                       autoComplete="email"
                       list={recentEmails.length ? "recent-login-emails" : undefined}
-                      placeholder="admin@company.com"
+                      placeholder="admin@company.com or username"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       required

@@ -1,13 +1,13 @@
-// src/api/client.js
+﻿// src/api/client.js
 import API_BASE from "@/config/api";
 
 /* =========================
-   TOKEN (zyro_jwt safe)
+   TOKEN (xandora_jwt safe)
 ========================= */
 function getToken() {
   return (
-    localStorage.getItem("zyro_jwt") ||
-    sessionStorage.getItem("zyro_jwt") ||
+    localStorage.getItem("xandora_jwt") ||
+    sessionStorage.getItem("xandora_jwt") ||
     localStorage.getItem("token") ||
     sessionStorage.getItem("token") ||
     null

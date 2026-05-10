@@ -1,4 +1,4 @@
-services:
+﻿services:
   postgres:
     image: postgres:16
     restart: unless-stopped
@@ -9,7 +9,7 @@ services:
     volumes:
       - saas-postgres-data:/var/lib/postgresql/data
     networks:
-      - zyro-net
+      - xandora-net
 
   rabbitmq:
     image: rabbitmq:3-management
@@ -17,13 +17,13 @@ services:
     volumes:
       - saas-rabbitmq-data:/var/lib/rabbitmq
     networks:
-      - zyro-net
+      - xandora-net
 
   redis:
     image: redis:7
     restart: unless-stopped
     networks:
-      - zyro-net
+      - xandora-net
 
   api:
     build:
@@ -38,7 +38,7 @@ services:
       - rabbitmq
       - redis
     networks:
-      - zyro-net
+      - xandora-net
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 20s
@@ -59,7 +59,7 @@ services:
       - rabbitmq
       - redis
     networks:
-      - zyro-net
+      - xandora-net
 
   dashboard:
     build:
@@ -67,7 +67,7 @@ services:
       dockerfile: deploy/saas/Dockerfile.dashboard
     restart: unless-stopped
     networks:
-      - zyro-net
+      - xandora-net
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/ >/dev/null 2>&1 || exit 1"]
       interval: 20s
@@ -90,10 +90,10 @@ services:
       - saas-caddy-data:/data
       - saas-caddy-config:/config
     networks:
-      - zyro-net
+      - xandora-net
 
 networks:
-  zyro-net:
+  xandora-net:
     driver: bridge
 
 volumes:

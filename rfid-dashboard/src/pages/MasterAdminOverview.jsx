@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import { apiGet } from "@/lib/api";
 
 function isInternalCompany(value) {
@@ -60,7 +60,7 @@ export default function MasterAdminOverview() {
   const [error, setError] = useState("");
   const [lastUpdatedAt, setLastUpdatedAt] = useState(null);
   const [companyView, setCompanyView] = useState(() =>
-    normalizeCompanyView(localStorage.getItem("zyro_company_view") || "")
+    normalizeCompanyView(localStorage.getItem("xandora_company_view") || "")
   );
 
   useEffect(() => {
@@ -89,7 +89,7 @@ export default function MasterAdminOverview() {
 
     function syncCompanyScope() {
       setCompanyView(
-        normalizeCompanyView(localStorage.getItem("zyro_company_view") || "")
+        normalizeCompanyView(localStorage.getItem("xandora_company_view") || "")
       );
     }
 
@@ -102,15 +102,17 @@ export default function MasterAdminOverview() {
 
     const intervalId = setInterval(loadSummary, 15000);
     window.addEventListener("storage", syncCompanyScope);
-    window.addEventListener("zyro_store_changed", syncAndReload);
-    window.addEventListener("zyro_stores_updated", syncAndReload);
+    window.addEventListener("xandora_store_changed", syncAndReload);
+    window.addEventListener("xandora_stores_updated", syncAndReload);
+    window.addEventListener("xandora_company_view_changed", syncAndReload);
 
     return () => {
       disposed = true;
       clearInterval(intervalId);
       window.removeEventListener("storage", syncCompanyScope);
-      window.removeEventListener("zyro_store_changed", syncAndReload);
-      window.removeEventListener("zyro_stores_updated", syncAndReload);
+      window.removeEventListener("xandora_store_changed", syncAndReload);
+      window.removeEventListener("xandora_stores_updated", syncAndReload);
+      window.removeEventListener("xandora_company_view_changed", syncAndReload);
     };
   }, []);
 

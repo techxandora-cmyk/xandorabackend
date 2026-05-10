@@ -1,6 +1,6 @@
 // rfid-dashboard/src/pages/Dashboard.jsx
 import React, { useEffect, useState } from "react";
-import { fetchMetrics, API_BASE } from "@/config/api";
+import { fetchMetrics } from "@/config/api";
 import KPIGrid from "../components/KPIGrid";
 
 export default function Dashboard() {
@@ -37,7 +37,7 @@ export default function Dashboard() {
     <div className="mx-auto w-full max-w-6xl px-4 py-6">
       <div className="mb-6">
         <h1 className="h1">Overview</h1>
-        <p className="subtle">Summary KPIs (clean dashboard)</p>
+        <p className="subtle">Live store metrics — updates every 10 seconds</p>
       </div>
 
       {err ? (
@@ -50,7 +50,6 @@ export default function Dashboard() {
       <KPIGrid
         data={m}
         loading={loading}
-        apiBase={API_BASE}
         highlightKeys={[
           "total_pos_transactions",
           "total_items_sold",

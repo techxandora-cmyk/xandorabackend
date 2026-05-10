@@ -1,4 +1,4 @@
-/* eslint-disable react-refresh/only-export-components */
+﻿/* eslint-disable react-refresh/only-export-components */
 
 import React, {
   createContext,
@@ -83,7 +83,7 @@ export function AuthProvider({ children }) {
   const [token, setToken] = useState(null);
   const [loading, setLoading] = useState(true);
   const [companyView, setCompanyView] = useState(() =>
-    normalizeCompanyView(localStorage.getItem("zyro_company_view") || "")
+    normalizeCompanyView(localStorage.getItem("xandora_company_view") || "")
   );
 
   /* =========================
@@ -91,8 +91,8 @@ export function AuthProvider({ children }) {
   ========================= */
   useEffect(() => {
     const storedToken =
-      localStorage.getItem("zyro_jwt") ??
-      sessionStorage.getItem("zyro_jwt");
+      localStorage.getItem("xandora_jwt") ??
+      sessionStorage.getItem("xandora_jwt");
 
     if (!storedToken) {
       setLoading(false);
@@ -115,6 +115,7 @@ export function AuthProvider({ children }) {
       product_key: decoded.product_key || "retail",
       store_ids: decoded.store_ids || [],
       default_store_id: decoded.default_store_id || null,
+      force_password_change: Boolean(decoded.force_password_change),
     };
 
     setToken(storedToken);
@@ -125,16 +126,16 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     function syncCompanyView() {
       const normalized = normalizeCompanyView(
-        localStorage.getItem("zyro_company_view") || ""
+        localStorage.getItem("xandora_company_view") || ""
       );
       setCompanyView((prev) => (prev === normalized ? prev : normalized));
     }
 
     window.addEventListener("storage", syncCompanyView);
-    window.addEventListener("zyro_company_view_changed", syncCompanyView);
+    window.addEventListener("xandora_company_view_changed", syncCompanyView);
     return () => {
       window.removeEventListener("storage", syncCompanyView);
-      window.removeEventListener("zyro_company_view_changed", syncCompanyView);
+      window.removeEventListener("xandora_company_view_changed", syncCompanyView);
     };
   }, []);
 
@@ -156,31 +157,32 @@ export function AuthProvider({ children }) {
       product_key: decoded.product_key || "retail",
       store_ids: decoded.store_ids || [],
       default_store_id: decoded.default_store_id || null,
+      force_password_change: Boolean(decoded.force_password_change),
     };
 
     setUser(fullUser);
     setToken(token);
 
     // Prevent cross-account token leakage between remember/session modes.
-    localStorage.removeItem("zyro_jwt");
-    localStorage.removeItem("zyro_user");
-    sessionStorage.removeItem("zyro_jwt");
-    sessionStorage.removeItem("zyro_user");
+    localStorage.removeItem("xandora_jwt");
+    localStorage.removeItem("xandora_user");
+    sessionStorage.removeItem("xandora_jwt");
+    sessionStorage.removeItem("xandora_user");
 
     const store = remember ? localStorage : sessionStorage;
-    store.setItem("zyro_jwt", token);
-    store.setItem("zyro_user", JSON.stringify(fullUser));
+    store.setItem("xandora_jwt", token);
+    store.setItem("xandora_user", JSON.stringify(fullUser));
 
     // Clear stale tenant/store switch state on new login,
     // then seed the store from the token so pages load immediately.
-    localStorage.removeItem("zyro_company_view");
+    localStorage.removeItem("xandora_company_view");
     setCompanyView("");
     const firstStore = decoded.default_store_id ||
       (Array.isArray(decoded.store_ids) && decoded.store_ids[0]) || "";
     if (firstStore) {
-      localStorage.setItem("zyro_store_id", firstStore);
+      localStorage.setItem("xandora_store_id", firstStore);
     } else {
-      localStorage.removeItem("zyro_store_id");
+      localStorage.removeItem("xandora_store_id");
     }
   }
 
@@ -191,12 +193,12 @@ export function AuthProvider({ children }) {
     setUser(null);
     setToken(null);
 
-    localStorage.removeItem("zyro_jwt");
-    localStorage.removeItem("zyro_user");
-    localStorage.removeItem("zyro_store_id");
-    localStorage.removeItem("zyro_company_view");
-    sessionStorage.removeItem("zyro_jwt");
-    sessionStorage.removeItem("zyro_user");
+    localStorage.removeItem("xandora_jwt");
+    localStorage.removeItem("xandora_user");
+    localStorage.removeItem("xandora_store_id");
+    localStorage.removeItem("xandora_company_view");
+    sessionStorage.removeItem("xandora_jwt");
+    sessionStorage.removeItem("xandora_user");
     setCompanyView("");
 
     window.location.href = "/login";
@@ -239,6 +241,11 @@ export function AuthProvider({ children }) {
   // Admin UI access (MASTER_ADMIN allowed, but distinct)
   const canAccessAdminUI = isMasterAdmin || isAdmin;
 
+  // Called after change-password to swap in the new token without a full logout
+  function refreshToken(newToken) {
+    setAuth(null, newToken, !!localStorage.getItem("xandora_jwt"));
+  }
+
   const value = {
     user,
     token,
@@ -254,7 +261,9 @@ export function AuthProvider({ children }) {
     productKey,
 
     store_ids: user?.store_ids || [],
+    forcePasswordChange: Boolean(user?.force_password_change),
     setAuth,
+    refreshToken,
     logout,
   };
 

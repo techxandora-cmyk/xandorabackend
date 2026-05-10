@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { AuthContext } from "./AuthContext";
 
 export default function AuthProvider({ children }) {
@@ -7,8 +7,8 @@ export default function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const t = localStorage.getItem("zyro_jwt");
-    const u = localStorage.getItem("zyro_user");
+    const t = localStorage.getItem("xandora_jwt");
+    const u = localStorage.getItem("xandora_user");
     if (t && u) {
       setToken(t);
       setUser(JSON.parse(u));
@@ -19,8 +19,8 @@ export default function AuthProvider({ children }) {
   function setAuth(user, token) {
     setUser(user);
     setToken(token);
-    localStorage.setItem("zyro_jwt", token);
-    localStorage.setItem("zyro_user", JSON.stringify(user));
+    localStorage.setItem("xandora_jwt", token);
+    localStorage.setItem("xandora_user", JSON.stringify(user));
   }
 
   function logout() {

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { apiGet, apiPost } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 
@@ -14,7 +14,7 @@ export default function AdminDashboard() {
   const [companyOptions, setCompanyOptions] = useState([]);
   const [selectedCompany, setSelectedCompany] = useState("ALL");
   const [registryStoreId, setRegistryStoreId] = useState(
-    localStorage.getItem("zyro_store_id") || "STORE_001"
+    localStorage.getItem("xandora_store_id") || "STORE_001"
   );
   const [registryQuery, setRegistryQuery] = useState("");
   const [backfillLoading, setBackfillLoading] = useState(false);
@@ -114,7 +114,7 @@ export default function AdminDashboard() {
   }
 
   async function handleClearOperationalLogs() {
-    const storeId = localStorage.getItem("zyro_store_id") || "STORE_001";
+    const storeId = localStorage.getItem("xandora_store_id") || "STORE_001";
     const ok = window.confirm(
       `Clear all operational logs for ${storeId}? This removes scans, billing, inventory, and POS history for the selected store.`
     );
@@ -131,9 +131,9 @@ export default function AdminDashboard() {
 
       setOperationalLogResult(res || null);
 
-      window.dispatchEvent(new Event("zyro_store_changed"));
-      window.dispatchEvent(new Event("zyro_scans_reset"));
-      window.dispatchEvent(new Event("zyro_catalog_seeded"));
+      window.dispatchEvent(new Event("xandora_store_changed"));
+      window.dispatchEvent(new Event("xandora_scans_reset"));
+      window.dispatchEvent(new Event("xandora_catalog_seeded"));
     } catch (e) {
       setError(e?.message || "Failed to clear operational logs");
     } finally {

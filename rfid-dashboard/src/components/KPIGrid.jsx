@@ -2,7 +2,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import MetricCard from "./MetricCard";
 
-export default function KPIGrid({ data, loading, apiBase, highlightKeys = [] }) {
+export default function KPIGrid({ data, loading, highlightKeys = [] }) {
   const [pulseKey, setPulseKey] = useState(null);
   const prev = useRef(data);
 
@@ -50,11 +50,6 @@ export default function KPIGrid({ data, loading, apiBase, highlightKeys = [] }) 
         title="Items Scanned (24h)"
         value={data?.items_scanned_24h ?? 0}
         loading={loading}
-      />
-      <MetricCard
-        title="API Base"
-        value={apiBase}
-        mono
       />
       <MetricCard
         title="Last Updated"

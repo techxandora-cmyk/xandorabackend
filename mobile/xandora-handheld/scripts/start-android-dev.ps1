@@ -5,8 +5,14 @@ param(
 $ErrorActionPreference = 'Stop'
 
 $projectRoot = Split-Path -Parent $PSScriptRoot
+$androidRoot = Join-Path $projectRoot 'android'
 $logsDir = Join-Path $projectRoot '.logs'
-$appId = 'com.xandorahandheld'
+$gradleUserHome = Join-Path $env:LOCALAPPDATA 'XandoraHandheldGradleDebug'
+$androidUserHome = Join-Path $env:LOCALAPPDATA 'XandoraAndroidHome'
+$gradleGroovyDslCache = Join-Path $gradleUserHome 'caches\9.0.0\groovy-dsl'
+$appId = 'com.xandorahandheld.debug'
+$launchActivity = 'com.xandorahandheld.MainActivity'
+$debugApkPath = Join-Path $androidRoot 'app\build\outputs\apk\debug\app-debug.apk'
 $preferenceFileName = "${appId}_preferences.xml"
 $localPreferencePath = Join-Path $logsDir $preferenceFileName
 $devicePreferencePath = "/data/local/tmp/$preferenceFileName"
@@ -70,6 +76,39 @@ function Assert-AdbDevice {
   }
 }
 
+function Build-AndInstallDebugApk {
+  if (-not (Test-Path $androidRoot)) {
+    throw "Android project directory not found at $androidRoot"
+  }
+
+  New-Item -ItemType Directory -Force -Path $gradleUserHome | Out-Null
+  New-Item -ItemType Directory -Force -Path $androidUserHome | Out-Null
+  if (Test-Path $gradleGroovyDslCache) {
+    Remove-Item -LiteralPath $gradleGroovyDslCache -Recurse -Force
+  }
+
+  Push-Location $androidRoot
+  try {
+    $env:GRADLE_USER_HOME = $gradleUserHome
+    $env:ANDROID_USER_HOME = $androidUserHome
+    & cmd.exe /c 'gradlew.bat app:assembleDebug -PreactNativeDevServerPort=8081 --no-daemon --console=plain'
+    if ($LASTEXITCODE -ne 0) {
+      throw 'Gradle debug APK build failed.'
+    }
+  } finally {
+    Pop-Location
+  }
+
+  if (-not (Test-Path $debugApkPath)) {
+    throw "Debug APK was not created at $debugApkPath"
+  }
+
+  & adb install -r $debugApkPath | Out-Null
+  if ($LASTEXITCODE -ne 0) {
+    throw 'adb install for the debug APK failed.'
+  }
+}
+
 function Write-DebugHostPreference {
   New-Item -ItemType Directory -Force -Path $logsDir | Out-Null
 
@@ -83,6 +122,11 @@ function Write-DebugHostPreference {
   & adb push $localPreferencePath $devicePreferencePath | Out-Null
   if ($LASTEXITCODE -ne 0) {
     throw "Failed to push the React Native debug host preference to the device."
+  }
+
+  & adb shell run-as $appId mkdir -p "/data/user/0/$appId/shared_prefs" | Out-Null
+  if ($LASTEXITCODE -ne 0) {
+    throw "Failed to create the shared_prefs directory for $appId."
   }
 
   & adb shell run-as $appId cp $devicePreferencePath $appPreferencePath | Out-Null
@@ -109,22 +153,15 @@ if ($SkipAndroidLaunch) {
   return
 }
 
-Write-Host 'Installing and opening Xandora Handheld...'
-Push-Location $projectRoot
-try {
-  & npx react-native run-android --active-arch-only
-  if ($LASTEXITCODE -ne 0) {
-    throw 'react-native run-android failed.'
-  }
-} finally {
-  Pop-Location
-}
+Write-Host 'Building and installing Xandora Debug...'
+Build-AndInstallDebugApk
 
 Write-Host 'Pinning the React Native debug host to localhost:8081...'
 Write-DebugHostPreference
 
 & adb shell am force-stop $appId | Out-Null
-& adb shell am start -n "${appId}/.MainActivity" | Out-Null
+& adb shell am start -n "${appId}/${launchActivity}" | Out-Null
 
-Write-Host 'Xandora Handheld should now be launching.'
+Write-Host 'Xandora Debug should now be launching.'
+Write-Host 'The standalone release app remains installed separately as Xandora.'
 Write-Host "Metro logs: $metroOutLog"

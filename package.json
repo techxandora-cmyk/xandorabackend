@@ -1,4 +1,4 @@
-{
+﻿{
   "name": "rfid-middleware",
   "version": "1.0.0",
   "description": "",
@@ -7,7 +7,7 @@
     "start": "node backend/server.js",
     "start:dev": "nodemon --watch backend --watch src -e js,json --exec \"node backend/server.js\"",
     "worker": "node backend/worker.js",
-    "reader:bridge": "node zyro-llrp-bridge.js",
+    "reader:bridge": "node xandora-llrp-bridge.js",
     "reader:pm2": "pm2 start ecosystem.readers.config.cjs",
     "migrate": "node scripts/run_migrations.js",
     "dashboard": "cd rfid-dashboard && npm run dev -- --host",

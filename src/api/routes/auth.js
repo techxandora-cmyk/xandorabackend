@@ -295,6 +295,48 @@ function resolvePermissions({ roles, companyByRole, globalByRole }) {
   return perms.has("*") ? ["*"] : Array.from(perms);
 }
 
+function looksLikeBcryptHash(value) {
+  return /^\$2[aby]\$\d{2}\$[./A-Za-z0-9]{53}$/.test(String(value || ""));
+}
+
+async function verifyPassword(pool, user, password) {
+  const suppliedPassword = String(password || "");
+  const storedHash = String(user?.password_hash || "");
+
+  if (!storedHash) {
+    console.warn("[auth/login] user has no password_hash; rejecting login", {
+      user_id: user?.id || null,
+      email: user?.email || null,
+    });
+    return false;
+  }
+
+  if (looksLikeBcryptHash(storedHash)) {
+    return bcrypt.compare(suppliedPassword, storedHash);
+  }
+
+  if (storedHash !== suppliedPassword) {
+    return false;
+  }
+
+  try {
+    const nextHash = await bcrypt.hash(suppliedPassword, 10);
+    await pool.query(
+      `
+      UPDATE users
+      SET password_hash = $2,
+          updated_at = NOW()
+      WHERE id = $1
+      `,
+      [user.id, nextHash]
+    );
+  } catch (e) {
+    console.warn("[auth/login] failed to upgrade legacy password hash:", e.message);
+  }
+
+  return true;
+}
+
 module.exports = function buildAuthRoutes(pool) {
   const router = express.Router();
 
@@ -317,7 +359,8 @@ module.exports = function buildAuthRoutes(pool) {
 
       const userResult = await pool.query(
         `
-        SELECT id, email, password_hash, is_active, company_name
+        SELECT id, email, COALESCE(password_hash, '') AS password_hash, is_active, company_name,
+               COALESCE(force_password_change, FALSE) AS force_password_change
         FROM users
         WHERE email = $1
         `,
@@ -337,7 +380,7 @@ module.exports = function buildAuthRoutes(pool) {
         });
       }
 
-      const valid = await bcrypt.compare(password, user.password_hash);
+      const valid = await verifyPassword(pool, user, password);
       if (!valid) {
         return res.status(401).json({ ok: false });
       }
@@ -494,6 +537,8 @@ module.exports = function buildAuthRoutes(pool) {
         globalByRole,
       });
 
+      const forcePasswordChange = Boolean(user.force_password_change);
+
       const token = jwt.sign(
         {
           user_id: user.id,
@@ -504,15 +549,92 @@ module.exports = function buildAuthRoutes(pool) {
           product_key: productKey,
           store_ids,
           default_store_id: store_ids[0] || null,
+          force_password_change: forcePasswordChange,
         },
         process.env.JWT_SECRET,
         { expiresIn: process.env.JWT_EXPIRES_IN || "30d" }
       );
 
-      return res.json({ ok: true, token });
+      return res.json({ ok: true, token, force_password_change: forcePasswordChange });
     } catch (e) {
       console.error("[auth/login]", e);
       return res.status(500).json({ ok: false });
+    }
+  });
+
+  // POST /auth/change-password — authenticated user changes their own password
+  router.post("/change-password", async (req, res) => {
+    const authHeader = req.headers.authorization || "";
+    const rawToken = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
+    if (!rawToken) return res.status(401).json({ ok: false, error: "Unauthorized" });
+
+    let decoded;
+    try {
+      decoded = jwt.verify(rawToken, process.env.JWT_SECRET);
+    } catch {
+      return res.status(401).json({ ok: false, error: "Invalid or expired session" });
+    }
+
+    const { current_password, new_password } = req.body || {};
+    if (!new_password || String(new_password).length < 8) {
+      return res.status(400).json({ ok: false, error: "New password must be at least 8 characters" });
+    }
+
+    try {
+      const userResult = await pool.query(
+        `SELECT id, email, COALESCE(password_hash,'') AS password_hash, company_name,
+                COALESCE(force_password_change, FALSE) AS force_password_change
+         FROM users WHERE id = $1`,
+        [decoded.user_id]
+      );
+      if (!userResult.rowCount) return res.status(404).json({ ok: false, error: "User not found" });
+
+      const user = userResult.rows[0];
+
+      // If not a forced change, verify current password
+      if (!user.force_password_change) {
+        if (!current_password) return res.status(400).json({ ok: false, error: "Current password required" });
+        const valid = await verifyPassword(pool, user, current_password);
+        if (!valid) return res.status(401).json({ ok: false, error: "Current password is incorrect" });
+      }
+
+      const newHash = await bcrypt.hash(String(new_password), 10);
+      await pool.query(
+        `UPDATE users SET password_hash=$1, force_password_change=FALSE, updated_at=NOW() WHERE id=$2`,
+        [newHash, user.id]
+      );
+
+      // Re-issue JWT with force_password_change cleared
+      const access = await pool.query(
+        `SELECT store_id, role FROM user_store_roles WHERE user_id=$1`, [user.id]
+      );
+      const roles = Array.from(new Set(access.rows.map((r) => String(r.role || "").toUpperCase())));
+      const store_ids = Array.from(new Set(
+        access.rows.map((r) => r.store_id).filter((id) => id && id !== "_GLOBAL_")
+      ));
+      const { globalByRole, companyByRole } = await loadPermissionsByRole(pool, roles, user.company_name);
+      const permissions = resolvePermissions({ roles, companyByRole, globalByRole });
+
+      const newToken = jwt.sign(
+        {
+          user_id: user.id,
+          email: user.email,
+          company_name: user.company_name,
+          roles,
+          permissions,
+          product_key: decoded.product_key || "retail",
+          store_ids,
+          default_store_id: store_ids[0] || null,
+          force_password_change: false,
+        },
+        process.env.JWT_SECRET,
+        { expiresIn: process.env.JWT_EXPIRES_IN || "30d" }
+      );
+
+      return res.json({ ok: true, token: newToken });
+    } catch (e) {
+      console.error("[auth/change-password]", e);
+      return res.status(500).json({ ok: false, error: "Failed to change password" });
     }
   });
 

@@ -1,11 +1,11 @@
-const net = require("net");
+﻿const net = require("net");
 const axios = require("axios");
 
 const HOST = "192.168.100.50";
 const PORT = 5084;
 
 const API_URL = "http://localhost:3000/api/v1/scans/batch";
-const SCAN_KEY = process.env.SCAN_API_KEY || "zyro_reader_001";
+const SCAN_KEY = process.env.SCAN_API_KEY || "xandora_reader_001";
 
 const DEVICE_ID = "FX9600_01";
 const STORE_ID = "STORE_001";
@@ -126,10 +126,10 @@ function extractEPC(buffer) {
 }
 
 /* ============================= */
-/* SEND TO ZYRO                  */
+/* SEND TO Xandora                  */
 /* ============================= */
 
-async function sendToZyro(epc) {
+async function sendToXandora(epc) {
   try {
     await axios.post(
       API_URL,
@@ -151,9 +151,9 @@ async function sendToZyro(epc) {
       }
     );
 
-    console.log("✅ Sent to Zyro:", epc);
+    console.log("✅ Sent to Xandora:", epc);
   } catch (err) {
-    console.log("❌ Zyro POST failed:", err.response?.data || err.message);
+    console.log("❌ Xandora POST failed:", err.response?.data || err.message);
   }
 }
 
@@ -190,7 +190,7 @@ function handleMessage(data) {
       const epc = extractEPC(data);
       if (epc) {
         console.log("🔥 EPC:", epc);
-        sendToZyro(epc);
+        sendToXandora(epc);
       } else {
         console.log("Tag report but EPC not found");
       }

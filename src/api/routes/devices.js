@@ -1,4 +1,4 @@
-const express = require("express");
+﻿const express = require("express");
 const jwt = require("jsonwebtoken");
 const {
   parseDeviceZoneConfig,
@@ -151,7 +151,7 @@ module.exports = function buildDevicesRoutes(pool) {
     const key =
       req.headers["x-device-key"] ||
       req.headers["x-api-key"] ||
-      req.headers["x-zyro-device-key"];
+      req.headers["x-xandora-device-key"];
 
     const expected = process.env.DEVICE_API_KEY;
 

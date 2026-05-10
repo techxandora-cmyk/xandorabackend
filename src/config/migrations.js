@@ -15,6 +15,10 @@ const MIGRATION_ORDER = [
   "20260329_product_access.sql",
   "20260329_stock_audit_rename.sql",
   "20260330_session_scan_hardening.sql",
+  "20260424_enable_laundry_product.sql",
+  "20260510_scan_tokens.sql",
+  "20260510_force_password_change.sql",
+  "20260510_cleanup_master_admin_store_roles.sql",
 ];
 
 const CORE_READY_TABLES = [

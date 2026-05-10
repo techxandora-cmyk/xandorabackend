@@ -1,12 +1,12 @@
-// src/lib/api.js
+﻿// src/lib/api.js
 
 const API_BASE =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:3000/api/v1";
 
 function getToken() {
   return (
-    localStorage.getItem("zyro_jwt") ||
-    sessionStorage.getItem("zyro_jwt") ||
+    localStorage.getItem("xandora_jwt") ||
+    sessionStorage.getItem("xandora_jwt") ||
     null
   );
 }

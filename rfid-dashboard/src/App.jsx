@@ -34,6 +34,9 @@ const AdminRolePermissions = lazy(
 const AdminSoftwareAccess = lazy(
   () => import("@/components/admin/AdminSoftwareAccess")
 );
+const AdminReaders = lazy(() => import("@/components/admin/AdminReaders"));
+const CustomerDetail = lazy(() => import("@/pages/CustomerDetail"));
+const ChangePassword = lazy(() => import("@/pages/ChangePassword"));
 
 function RouteLoading() {
   return (
@@ -54,6 +57,9 @@ export default function App() {
     <Routes>
       {/* LOGIN */}
       <Route path="/login" element={withRouteSuspense(<Login />)} />
+
+      {/* CHANGE PASSWORD — accessible to any logged-in user */}
+      <Route path="/change-password" element={withRouteSuspense(<ChangePasswordGuard />)} />
 
       {/* 🔒 MAIN LAYOUT — MUST HAVE PATH */}
       <Route path="/" element={<Layout />}>
@@ -293,11 +299,34 @@ export default function App() {
                 </PermissionRoute>
               )}
             />
+            <Route
+              path="readers"
+              element={withRouteSuspense(
+                <PermissionRoute masterAdminOnly>
+                  <AdminReaders />
+                </PermissionRoute>
+              )}
+            />
+            <Route
+              path="customer"
+              element={withRouteSuspense(
+                <PermissionRoute masterAdminOnly>
+                  <CustomerDetail />
+                </PermissionRoute>
+              )}
+            />
           </Route>
         </Route>
       </Route>
     </Routes>
   );
+}
+
+function ChangePasswordGuard() {
+  const { isAuthenticated, loading } = useAuth();
+  if (loading) return null;
+  if (!isAuthenticated) return <Navigate to="/login" replace />;
+  return <ChangePassword />;
 }
 
 function DefaultLanding() {
@@ -307,10 +336,14 @@ function DefaultLanding() {
     hasPermission,
     productKey,
     canAccessAdminUI,
+    forcePasswordChange,
   } = useAuth();
 
   if (loading) return null;
   if (!isAuthenticated) return <Navigate to="/login" replace />;
+
+  // Always intercept before anything else
+  if (forcePasswordChange) return <Navigate to="/change-password" replace />;
 
   if (productKey === "portal") {
     if (canAccessAdminUI) {
@@ -383,7 +416,9 @@ function DefaultLanding() {
 }
 
 function AdminPortalHome() {
-  const { isMasterAdmin } = useAuth();
+  const { isMasterAdmin, forcePasswordChange } = useAuth();
+
+  if (forcePasswordChange) return <Navigate to="/change-password" replace />;
 
   if (isMasterAdmin) {
     return <MasterAdminOverview />;
