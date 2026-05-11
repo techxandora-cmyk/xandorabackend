@@ -120,6 +120,18 @@ export function AuthProvider({ children }) {
 
     setToken(storedToken);
     setUser(restoredUser);
+
+    const seededStoreId =
+      String(localStorage.getItem("xandora_store_id") || "").trim() ||
+      String(decoded.default_store_id || "").trim() ||
+      (Array.isArray(decoded.store_ids) ? String(decoded.store_ids[0] || "").trim() : "");
+
+    if (seededStoreId) {
+      localStorage.setItem("xandora_store_id", seededStoreId);
+    } else {
+      localStorage.removeItem("xandora_store_id");
+    }
+
     setLoading(false);
   }, []);
 
