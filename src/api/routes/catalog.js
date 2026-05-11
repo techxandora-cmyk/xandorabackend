@@ -45,6 +45,11 @@ function actorFromRequest(req) {
 }
 
 function mapCatalogRow(row) {
+  const metadata =
+    row?.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata)
+      ? row.metadata
+      : {};
+
   return {
     store_id: row.store_id,
     epc: row.epc,
@@ -56,6 +61,11 @@ function mapCatalogRow(row) {
     size_label: row.size_label || null,
     color: row.color || null,
     price_lkr: row.price_lkr != null ? Number(row.price_lkr) : null,
+    bin: metadata.bin || null,
+    laundry_status: metadata.laundry_status || metadata.laundryStatus || null,
+    notes: metadata.notes || null,
+    stock: metadata.stock != null ? Number(metadata.stock) : null,
+    metadata,
     updated_at: row.updated_at || null,
   };
 }
@@ -118,6 +128,7 @@ module.exports = function buildCatalogRoutes(pool) {
         size_label,
         color,
         price_lkr,
+        metadata,
         updated_at,
         ${BARCODE_SQL} AS barcode
       FROM catalog_items
@@ -160,6 +171,7 @@ module.exports = function buildCatalogRoutes(pool) {
           size_label,
           color,
           price_lkr,
+          metadata,
           updated_at,
           ${BARCODE_SQL} AS barcode
         FROM catalog_items
@@ -216,6 +228,7 @@ module.exports = function buildCatalogRoutes(pool) {
             size_label,
             color,
             price_lkr,
+            metadata,
             updated_at,
             ${BARCODE_SQL} AS barcode
           FROM catalog_items
@@ -257,6 +270,7 @@ module.exports = function buildCatalogRoutes(pool) {
             size_label,
             color,
             price_lkr,
+            metadata,
             updated_at,
             ${BARCODE_SQL} AS barcode
           FROM catalog_items
@@ -445,6 +459,154 @@ module.exports = function buildCatalogRoutes(pool) {
     } catch (err) {
       console.error("[catalog/assign-items]", err);
       return res.status(500).json({ ok: false, error: "Failed to assign items" });
+    }
+  });
+
+  router.post("/upsert-item", async (req, res) => {
+    const client = await pool.connect();
+    try {
+      const store_id = String(req.body?.store_id || "").trim();
+      const epc = normalizeEpc(req.body?.epc);
+      const sku = String(req.body?.sku || "").trim() || null;
+      const product_name = String(
+        req.body?.product_name || req.body?.name || ""
+      ).trim();
+      const brand = String(req.body?.brand || "").trim() || null;
+      const category =
+        String(req.body?.category || "").trim() || "Uncategorized";
+      const size_label =
+        String(req.body?.size_label || req.body?.size || "").trim() || null;
+      const color = String(req.body?.color || "").trim() || null;
+      const barcode = normalizeBarcode(req.body?.barcode);
+      const bin = String(req.body?.bin || "").trim() || null;
+      const notes = String(req.body?.notes || "").trim() || null;
+      const laundry_status =
+        String(req.body?.laundry_status || req.body?.laundryStatus || "").trim() ||
+        null;
+      const stockRaw = Number(req.body?.stock);
+      const stock = Number.isFinite(stockRaw) ? Math.max(Math.round(stockRaw), 0) : null;
+      const priceRaw =
+        req.body?.price_lkr != null ? req.body.price_lkr : req.body?.price;
+      const priceParsed = Number(priceRaw);
+      const price_lkr = Number.isFinite(priceParsed)
+        ? Math.max(Number(priceParsed.toFixed(2)), 0)
+        : 0;
+
+      if (!store_id) {
+        return res.status(400).json({ ok: false, error: "store_id required" });
+      }
+
+      if (!epc) {
+        return res.status(400).json({ ok: false, error: "epc required" });
+      }
+
+      if (!product_name) {
+        return res.status(400).json({ ok: false, error: "product_name required" });
+      }
+
+      if (!canAccessStore(req, store_id)) {
+        return res.status(403).json({ ok: false, error: "Forbidden" });
+      }
+
+      await ensureCatalogTable(client);
+      await client.query("BEGIN");
+
+      const metadata = {
+        ...(barcode ? { barcode } : {}),
+        ...(bin ? { bin } : {}),
+        ...(notes ? { notes } : {}),
+        ...(laundry_status ? { laundry_status } : {}),
+        ...(stock != null ? { stock } : {}),
+      };
+
+      const upsertResult = await client.query(
+        `
+        INSERT INTO catalog_items (
+          store_id,
+          epc,
+          sku,
+          product_name,
+          brand,
+          category,
+          size_label,
+          color,
+          price_lkr,
+          metadata,
+          updated_at
+        )
+        VALUES (
+          $1, $2, $3, $4, $5, $6, $7, $8, $9::numeric, $10::jsonb, NOW()
+        )
+        ON CONFLICT (store_id, epc)
+        DO UPDATE SET
+          sku = EXCLUDED.sku,
+          product_name = EXCLUDED.product_name,
+          brand = EXCLUDED.brand,
+          category = EXCLUDED.category,
+          size_label = EXCLUDED.size_label,
+          color = EXCLUDED.color,
+          price_lkr = EXCLUDED.price_lkr,
+          metadata = COALESCE(catalog_items.metadata, '{}'::jsonb) || EXCLUDED.metadata,
+          updated_at = NOW()
+        RETURNING
+          store_id,
+          epc,
+          sku,
+          product_name,
+          brand,
+          category,
+          size_label,
+          color,
+          price_lkr,
+          metadata,
+          updated_at,
+          ${BARCODE_SQL} AS barcode
+        `,
+        [
+          store_id,
+          epc,
+          sku,
+          product_name,
+          brand,
+          category,
+          size_label,
+          color,
+          price_lkr,
+          JSON.stringify(metadata),
+        ]
+      );
+
+      const item = mapCatalogRow(upsertResult.rows[0]);
+      await writeAuditLog(client, {
+        ...actorFromRequest(req),
+        action: "CATALOG_ITEM_UPSERT",
+        entity_type: "CATALOG_ITEM",
+        entity_id: `${store_id}:${epc}`,
+        store_id,
+        metadata: {
+          epc,
+          sku,
+          barcode: barcode || null,
+          product_name,
+          brand,
+          category,
+          size_label,
+          color,
+          price_lkr,
+          bin,
+          laundry_status,
+          stock,
+        },
+      });
+
+      await client.query("COMMIT");
+      return res.json({ ok: true, item });
+    } catch (err) {
+      await client.query("ROLLBACK");
+      console.error("[catalog/upsert-item]", err);
+      return res.status(500).json({ ok: false, error: "Failed to save catalog item" });
+    } finally {
+      client.release();
     }
   });
 

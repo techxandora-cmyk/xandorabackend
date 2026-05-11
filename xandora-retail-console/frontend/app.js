@@ -1,8 +1,13 @@
 (function () {
   const $ = (id) => document.getElementById(id);
+  const SESSION_STORAGE_KEY = "xandora_retail_console_session";
 
   const state = {
     activeView: "billing",
+    runtimeMode: "demo",
+    sessionId: localStorage.getItem(SESSION_STORAGE_KEY) || "",
+    session: null,
+    pendingStores: [],
     cart: { items: [], count: 0, total: 0, currency: "LKR" },
     inZone: [],
     inventory: [],
@@ -19,6 +24,9 @@
 
   const refs = {
     apiStatus: $("api-status"),
+    sessionUser: $("session-user"),
+    sessionStore: $("session-store"),
+    logoutBtn: $("logout-btn"),
     bridgeStatus: $("bridge-status"),
     simStatus: $("sim-status"),
     simToggleBtn: $("sim-toggle-btn"),
@@ -80,6 +88,14 @@
     checkoutModalCount: $("checkout-modal-count"),
     checkoutModalTotal: $("checkout-modal-total"),
     eventLog: $("event-log"),
+    authModal: $("auth-modal"),
+    authMessage: $("auth-message"),
+    authForm: $("auth-form"),
+    authEmail: $("auth-email"),
+    authPassword: $("auth-password"),
+    authStoreWrap: $("auth-store-wrap"),
+    authStore: $("auth-store"),
+    authSubmit: $("auth-submit"),
   };
 
   function escapeHtml(value) {
@@ -121,8 +137,16 @@
 
   function setSimulatorBadge(isRunning) {
     state.simulatorRunning = !!isRunning;
+    if (state.runtimeMode === "real") {
+      refs.simStatus.textContent = "Live Data Mode";
+      refs.simStatus.className = "pill ok";
+      refs.simToggleBtn.hidden = true;
+      return;
+    }
+
     refs.simStatus.textContent = isRunning ? "Demo Feed Running" : "Demo Feed Stopped";
     refs.simStatus.className = `pill ${isRunning ? "ok" : "muted"}`;
+    refs.simToggleBtn.hidden = false;
     refs.simToggleBtn.textContent = isRunning ? "Stop Demo Feed" : "Start Demo Feed";
   }
 
@@ -133,27 +157,115 @@
     refs.eventLog.textContent = state.logLines.join("\n");
   }
 
-  async function apiGet(path) {
-    const res = await fetch(path);
+  function setStoredSessionId(sessionId) {
+    state.sessionId = String(sessionId || "").trim();
+    if (state.sessionId) {
+      localStorage.setItem(SESSION_STORAGE_KEY, state.sessionId);
+    } else {
+      localStorage.removeItem(SESSION_STORAGE_KEY);
+    }
+  }
+
+  function clearSessionState() {
+    setStoredSessionId("");
+    state.session = null;
+    state.pendingStores = [];
+    if (state.events) {
+      state.events.close();
+      state.events = null;
+    }
+    refs.sessionUser.hidden = true;
+    refs.sessionStore.hidden = true;
+    refs.logoutBtn.hidden = true;
+  }
+
+  function updateSessionChrome() {
+    const summary = state.session;
+    if (!summary?.authenticated) {
+      refs.sessionUser.hidden = true;
+      refs.sessionStore.hidden = true;
+      refs.logoutBtn.hidden = true;
+      return;
+    }
+
+    refs.sessionUser.hidden = false;
+    refs.sessionUser.textContent = summary.user?.email || "Signed in";
+    refs.sessionStore.hidden = false;
+    refs.sessionStore.textContent = summary.selected_store_id || "Select store";
+    refs.logoutBtn.hidden = false;
+  }
+
+  function applyProductVisibility() {
+    const products = Array.isArray(state.session?.products) ? state.session.products : [];
+    const hasLaundry = products.includes("laundry");
+    const hasStockAudit = products.includes("stock_audit");
+
+    refs.tabs.laundry.hidden = !hasLaundry;
+    refs.manualLaundryBtn.hidden = !hasLaundry;
+    refs.clearLaundryBtn.hidden = !hasLaundry;
+    if (!hasLaundry && state.activeView === "laundry") {
+      activateTab("billing");
+    }
+
+    refs.manualStocktakeBtn.disabled = !hasStockAudit;
+    refs.clearStocktakeBtn.disabled = !hasStockAudit;
+  }
+
+  function showAuthModal(message, stores = []) {
+    refs.authMessage.textContent =
+      message || "Sign in with your Xandora account to open your customer store.";
+    state.pendingStores = Array.isArray(stores) ? stores : [];
+    refs.authStoreWrap.hidden = !state.pendingStores.length;
+    refs.authStore.innerHTML = state.pendingStores
+      .map((storeId) => `<option value="${escapeHtml(storeId)}">${escapeHtml(storeId)}</option>`)
+      .join("");
+    refs.authPassword.disabled = Boolean(state.pendingStores.length);
+    refs.authEmail.disabled = Boolean(state.pendingStores.length);
+    refs.authSubmit.textContent = state.pendingStores.length ? "Open Store" : "Sign in";
+    refs.authModal.hidden = false;
+  }
+
+  function hideAuthModal() {
+    refs.authModal.hidden = true;
+    refs.authPassword.disabled = false;
+    refs.authEmail.disabled = false;
+    refs.authStoreWrap.hidden = true;
+    refs.authStore.innerHTML = "";
+    refs.authSubmit.textContent = "Sign in";
+  }
+
+  async function apiRequest(method, path, body) {
+    const headers = {};
+    if (state.sessionId) {
+      headers["x-retail-session"] = state.sessionId;
+    }
+    if (body !== undefined) {
+      headers["Content-Type"] = "application/json";
+    }
+
+    const res = await fetch(path, {
+      method,
+      headers,
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
     if (!res.ok) {
-      const text = await res.text();
-      throw new Error(`${res.status} ${text || res.statusText}`);
+      const payload = await res.json().catch(async () => {
+        const text = await res.text().catch(() => "");
+        return { error: text || res.statusText };
+      });
+      if (res.status === 401) {
+        clearSessionState();
+        showAuthModal("Sign in again to continue.");
+      }
+      const error = new Error(payload?.error || `${res.status} ${res.statusText}`);
+      error.status = res.status;
+      throw error;
     }
     return res.json();
   }
 
-  async function apiPost(path, body = {}) {
-    const res = await fetch(path, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    if (!res.ok) {
-      const text = await res.text();
-      throw new Error(`${res.status} ${text || res.statusText}`);
-    }
-    return res.json();
-  }
+  const apiGet = (path) => apiRequest("GET", path);
+  const apiPost = (path, body = {}) => apiRequest("POST", path, body);
 
   function getManualEpc() {
     return refs.manualEpc.value.trim().toUpperCase();
@@ -367,12 +479,21 @@
 
   async function refreshHealthAndStatus() {
     try {
-      const [health, status] = await Promise.all([apiGet("/api/health"), apiGet("/api/demo/status")]);
+      const [health, session, status] = await Promise.all([
+        apiGet("/api/health"),
+        apiGet("/api/session/status"),
+        apiGet("/api/demo/status"),
+      ]);
+      state.session = session;
+      state.runtimeMode = String(status.mode || "demo").toLowerCase();
+      updateSessionChrome();
+      applyProductVisibility();
       setApiOnline(Boolean(health.ok));
       setSimulatorBadge(Boolean(status.simulatorRunning));
       if (status.bridge?.configured) {
         setBridgeBadge(Boolean(status.bridge.connected));
       }
+      refs.closeDemoBtn.hidden = state.runtimeMode === "real";
     } catch (_err) {
       setApiOnline(false);
       setSimulatorBadge(false);
@@ -397,6 +518,14 @@
   }
 
   async function refreshStocktake() {
+    if (!Array.isArray(state.session?.products) || !state.session.products.includes("stock_audit")) {
+      state.stocktake = {
+        items: [],
+        summary: { uniqueEpcs: 0, totalScanEvents: 0 },
+      };
+      renderStocktake();
+      return;
+    }
     const data = await apiGet("/api/inventory/stocktake/recent?limit=80");
     state.stocktake = {
       items: data.items || [],
@@ -406,6 +535,14 @@
   }
 
   async function refreshLaundry() {
+    if (!Array.isArray(state.session?.products) || !state.session.products.includes("laundry")) {
+      state.laundry = {
+        items: [],
+        summary: { uniqueEpcs: 0, totalScanEvents: 0, byStatus: {} },
+      };
+      renderLaundry();
+      return;
+    }
     const data = await apiGet("/api/laundry/items?limit=80");
     state.laundry = {
       items: data.items || [],
@@ -462,7 +599,8 @@
     if (state.events) {
       state.events.close();
     }
-    state.events = new EventSource("/api/live/events");
+    if (!state.sessionId) return;
+    state.events = new EventSource(`/api/live/events?session_id=${encodeURIComponent(state.sessionId)}`);
     state.events.onmessage = (evt) => {
       try {
         const data = JSON.parse(evt.data);
@@ -497,6 +635,10 @@
   }
 
   async function toggleSimulator() {
+    if (state.runtimeMode === "real") {
+      pushLog("Live data mode is active; simulator is disabled.");
+      return;
+    }
     try {
       if (state.simulatorRunning) {
         await apiPost("/api/demo/simulator/stop");
@@ -549,6 +691,75 @@
     refs.assignNotes.value = item.notes || "";
   }
 
+  async function handleLoginSubmit(evt) {
+    evt.preventDefault();
+
+    try {
+      if (state.pendingStores.length) {
+        const selectedStore = String(refs.authStore.value || "").trim();
+        const session = await apiPost("/api/session/select-store", {
+          store_id: selectedStore,
+        });
+        state.session = session;
+        hideAuthModal();
+        updateSessionChrome();
+        applyProductVisibility();
+        connectEvents();
+        await refreshAll();
+        return;
+      }
+
+      const response = await fetch("/api/session/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: refs.authEmail.value.trim(),
+          password: refs.authPassword.value,
+        }),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(body?.error || "Login failed");
+      }
+
+      setStoredSessionId(body.session_id);
+      state.session = body;
+
+      if (body.needs_store_selection) {
+        showAuthModal("Select the store you want to open.", body.stores || []);
+        return;
+      }
+
+      hideAuthModal();
+      updateSessionChrome();
+      applyProductVisibility();
+      connectEvents();
+      await refreshAll();
+    } catch (err) {
+      showAuthModal(err.message || "Login failed");
+    }
+  }
+
+  async function restoreSession() {
+    if (!state.sessionId) {
+      showAuthModal();
+      return false;
+    }
+
+    try {
+      const session = await apiGet("/api/session/status");
+      state.session = session;
+      updateSessionChrome();
+      applyProductVisibility();
+      hideAuthModal();
+      return true;
+    } catch (_err) {
+      clearSessionState();
+      showAuthModal("Sign in with your Xandora account to open your customer store.");
+      return false;
+    }
+  }
+
   function bindUi() {
     refs.tabs.billing.addEventListener("click", () => activateTab("billing"));
     refs.tabs.inventory.addEventListener("click", () => activateTab("inventory"));
@@ -565,6 +776,16 @@
     refs.assignmentRefreshBtn.addEventListener("click", () => refreshAssignments());
     refs.recentEpcsRefreshBtn.addEventListener("click", () => refreshRecentEpcs());
     refs.simToggleBtn.addEventListener("click", toggleSimulator);
+    refs.logoutBtn.addEventListener("click", async () => {
+      try {
+        if (state.sessionId) {
+          await apiPost("/api/session/logout");
+        }
+      } catch (_err) {}
+      clearSessionState();
+      showAuthModal("You have been signed out.");
+    });
+    refs.authForm.addEventListener("submit", handleLoginSubmit);
 
     refs.clearCartBtn.addEventListener("click", async () => {
       try {
@@ -758,6 +979,8 @@
   async function init() {
     bindUi();
     activateTab("billing");
+    const restored = await restoreSession();
+    if (!restored) return;
     connectEvents();
     await refreshAll();
   }

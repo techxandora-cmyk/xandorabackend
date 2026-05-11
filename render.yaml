@@ -45,8 +45,8 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
-      - key: DEMO_SIM_ENABLED
-        value: "0"
+      - key: RETAIL_REAL_MODE
+        value: "1"
       - key: MAIN_API_URL
         value: https://xandorabackend-44dt.onrender.com
 

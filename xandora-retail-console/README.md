@@ -14,12 +14,45 @@ Open:
 
 `http://127.0.0.1:4300`
 
+## Real Backend Mode
+
+Use this when the retail console should write to and read from the main Xandora backend instead of the local demo JSON files.
+
+Required environment variables:
+
+- `RETAIL_REAL_MODE=1`
+- `MAIN_API_URL=https://xandorabackend-44dt.onrender.com`
+
+Example:
+
+```powershell
+$env:RETAIL_REAL_MODE="1"
+$env:MAIN_API_URL="https://xandorabackend-44dt.onrender.com"
+npm start
+```
+
+In real mode:
+
+- users sign in with their own Xandora account at runtime
+- users with access to multiple stores can choose their store after login
+- manual assignment saves into the main backend catalog
+- manual scans write into the main backend scan pipeline
+- stocktake scans use the main backend stock-audit session APIs
+- laundry actions use the main backend laundry APIs
+- the console no longer uses `backend/data/products.json` as the source of truth
+
+Deployment-day checklist:
+
+- `docs/real-mode-deploy-checklist.md`
+
 ## Touch-Screen Launch (Windows)
 
 - `launcher/Start-xandora-Retail-Console.bat`
 - `launcher/Stop-xandora-Retail-Console.bat`
 
 ## Data Files
+
+These files are used for demo mode only.
 
 - `backend/data/products.json`
 - `backend/data/epc_map.json`

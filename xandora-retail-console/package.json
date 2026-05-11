@@ -3,12 +3,12 @@
   "version": "0.1.0",
   "private": true,
   "description": "Xandora Retail Console for RFID billing, inventory, and laundry showcases",
-  "main": "backend/server.js",
+  "main": "backend/bootstrap.js",
   "scripts": {
-    "start": "node backend/server.js",
-    "start:no-sim": "cross-env DEMO_SIM_ENABLED=0 node backend/server.js",
-    "dev": "nodemon --watch backend --watch frontend -e js,json,html,css --exec \"node backend/server.js\"",
-    "check": "node --check backend/server.js"
+    "start": "node backend/bootstrap.js",
+    "start:no-sim": "cross-env DEMO_SIM_ENABLED=0 node backend/bootstrap.js",
+    "dev": "nodemon --watch backend --watch frontend -e js,json,html,css --exec \"node backend/bootstrap.js\"",
+    "check": "node --check backend/bootstrap.js && node --check backend/server.real.js && node --check backend/server.js"
   },
   "dependencies": {
     "cors": "^2.8.5",

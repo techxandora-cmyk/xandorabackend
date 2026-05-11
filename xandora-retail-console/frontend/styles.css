@@ -549,6 +549,32 @@ th {
   border-top: 1px solid rgba(65, 142, 218, 0.16);
 }
 
+.auth-backdrop {
+  z-index: 200;
+}
+
+.auth-panel {
+  width: min(460px, 94vw);
+}
+
+.auth-body {
+  justify-items: stretch;
+  text-align: left;
+}
+
+.auth-form {
+  display: grid;
+  gap: 12px;
+}
+
+.auth-form label {
+  display: grid;
+  gap: 6px;
+  color: var(--ink-1);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
 .recent-epcs-wrap {
   height: 245px;
   overflow-y: auto;

@@ -19,10 +19,13 @@
           </div>
         </div>
         <div class="status-wrap">
+          <span id="session-user" class="pill muted" hidden>Not signed in</span>
+          <span id="session-store" class="pill muted" hidden>No store selected</span>
           <span id="api-status" class="pill danger">API Offline</span>
           <span id="bridge-status" class="pill muted" hidden>Live Reader</span>
           <span id="sim-status" class="pill muted">Demo Feed</span>
           <button id="sim-toggle-btn" class="btn btn-outline" type="button">Start Demo Feed</button>
+          <button id="logout-btn" class="btn btn-outline" type="button" hidden>Log out</button>
           <button id="close-demo-btn" class="btn btn-danger" type="button">Close</button>
         </div>
       </header>
@@ -402,6 +405,34 @@
         </div>
         <div class="modal-actions">
           <button id="checkout-modal-done" class="btn" type="button">Return to Billing</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="auth-modal" class="modal-backdrop auth-backdrop" hidden>
+      <div class="modal-panel auth-panel" role="dialog" aria-modal="true" aria-labelledby="auth-modal-title">
+        <div class="modal-head">
+          <h2 id="auth-modal-title">Retail Console Login</h2>
+        </div>
+        <div class="modal-body auth-body">
+          <p id="auth-message" class="modal-copy">
+            Sign in with your Xandora account to open your customer store.
+          </p>
+          <form id="auth-form" class="auth-form">
+            <label>
+              Email
+              <input id="auth-email" class="text-input" type="email" autocomplete="username" required />
+            </label>
+            <label>
+              Password
+              <input id="auth-password" class="text-input" type="password" autocomplete="current-password" required />
+            </label>
+            <label id="auth-store-wrap" hidden>
+              Store
+              <select id="auth-store" class="text-input"></select>
+            </label>
+            <button id="auth-submit" class="btn" type="submit">Sign in</button>
+          </form>
         </div>
       </div>
     </div>
