@@ -161,21 +161,20 @@ class LiveBridge {
     this.lastScanAt = Date.now();
     this.totalScans += 1;
 
-    const resolved = this.dataStore.resolveOrAssignByEpc(epc, { persist: true });
-    if (!resolved?.item) return;
-
-    this.zoneTracker.touch(resolved.item, Date.now());
+    const item = this.dataStore.resolveByEpc(epc);
 
     this.broadcast({
       type: "live.scan",
       epc,
-      sku: resolved.item.sku,
-      name: resolved.item.name,
+      sku: item?.sku || null,
+      name: item?.name || null,
       device_id: data.device_id || "RFID_READER",
       store_id: data.store_id || "",
-      autoAssigned: resolved.autoAssigned,
+      assigned: Boolean(item),
       at: Date.now(),
     });
+
+    if (item) this.zoneTracker.touch(item, Date.now());
   }
 }
 

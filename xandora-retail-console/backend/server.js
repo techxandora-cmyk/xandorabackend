@@ -59,6 +59,10 @@ const demoState = {
 
 const knownEpcs = [...dataStore.epcToSku.keys()];
 
+// Track all recently seen EPCs (including unassigned) for the Assign Items view
+const recentLiveEpcs = new Map(); // epc -> { epc, seenAt }
+const RECENT_EPC_TTL_MS = 10 * 60 * 1000; // 10 minutes
+
 function randomInt(min, max) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
@@ -233,7 +237,15 @@ const liveBridge = new LiveBridge({
   mainApiUrl: MAIN_API_URL,
   dataStore,
   zoneTracker,
-  broadcast,
+  broadcast: (event) => {
+    if (event?.type === "live.scan" && event.epc) {
+      recentLiveEpcs.set(event.epc, { epc: event.epc, seenAt: event.at || Date.now() });
+      // Evict stale entries
+      const cutoff = Date.now() - RECENT_EPC_TTL_MS;
+      for (const [k, v] of recentLiveEpcs) if (v.seenAt < cutoff) recentLiveEpcs.delete(k);
+    }
+    broadcast(event);
+  },
 });
 
 if (MAIN_API_URL) {
@@ -492,14 +504,25 @@ app.get("/api/assignments", (_req, res) => {
 });
 
 app.get("/api/assignments/recent-epcs", (_req, res) => {
-  const liveRows = zoneTracker.list().map((item) => ({
-    epc: item.epc,
-    source: "Bin live zone",
-    seenAt: item.lastSeenAt,
-    ageSec: item.ageSec,
-    assigned: dataStore.isAssigned(item.epc),
-    item: dataStore.resolveByEpc(item.epc),
-  }));
+  const liveRows = [
+    ...zoneTracker.list().map((item) => ({
+      epc: item.epc,
+      source: "Bin live zone",
+      seenAt: item.lastSeenAt,
+      ageSec: item.ageSec,
+      assigned: dataStore.isAssigned(item.epc),
+      item: dataStore.resolveByEpc(item.epc),
+    })),
+    ...[...recentLiveEpcs.values()]
+      .filter((r) => !zoneTracker.list().some((z) => z.epc === r.epc))
+      .map((r) => ({
+        epc: r.epc,
+        source: "Live reader",
+        seenAt: r.seenAt,
+        assigned: dataStore.isAssigned(r.epc),
+        item: dataStore.resolveByEpc(r.epc),
+      })),
+  ];
 
   const stocktakeRows = stocktakeStore.recent(40).map((item) => ({
     epc: item.epc,
