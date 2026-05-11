@@ -145,6 +145,14 @@ class LiveBridge {
   }
 
   _handleEvent(eventName, data) {
+    if (eventName === "dwell_heartbeat") {
+      const epc = String(data.epc || "").trim().toUpperCase();
+      if (!epc) return;
+      const resolved = this.dataStore.resolveByEpc(epc);
+      if (resolved) this.zoneTracker.touch(resolved, Date.now());
+      return;
+    }
+
     if (eventName !== "scan") return;
 
     const epc = String(data.tag || "").trim().toUpperCase();
