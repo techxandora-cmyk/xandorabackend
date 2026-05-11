@@ -57,6 +57,22 @@ pm2 save
 pm2 startup
 ```
 
+### Windows quick path
+
+If the demo laptop is the bridge host, you can use the repo helper scripts instead of typing PM2 commands manually:
+
+```powershell
+npm run reader:pm2:start
+```
+
+To register a Windows Scheduled Task that starts the reader PM2 bridge at logon:
+
+```powershell
+npm run reader:pm2:startup
+```
+
+This is the simplest path for demo day when the laptop may be powered on just before the reader network is used.
+
 ## 4. Run 4 Readers with systemd
 
 Template unit: `deploy/systemd/xandora-reader@.service`  
