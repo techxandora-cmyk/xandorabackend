@@ -86,6 +86,23 @@ module.exports = function buildEventsRoutes(pool) {
 
       pushEvent(eventType, data);
 
+      // Keep device last_seen current on bridge heartbeat events so the
+      // reader doesn't appear offline when tags are being deduplicated.
+      if (pool && data.device_id && (eventType === "dwell_heartbeat" || eventType === "entered_zone")) {
+        pool.query(
+          `UPDATE devices SET last_seen = NOW(), last_heartbeat = NOW(), status = 'online'
+           WHERE device_id = $1`,
+          [String(data.device_id)]
+        ).catch(() => {});
+        if (data.store_id) {
+          pool.query(
+            `UPDATE registered_readers SET last_seen_at = NOW(), updated_at = NOW()
+             WHERE device_id = $1 AND store_id = $2`,
+            [String(data.device_id), String(data.store_id)]
+          ).catch(() => {});
+        }
+      }
+
       // Best effort persistence for analytics/audit
       if (pool && data.epc) {
         try {
