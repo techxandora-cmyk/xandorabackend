@@ -1,13 +1,16 @@
 (function () {
   const $ = (id) => document.getElementById(id);
   const SESSION_STORAGE_KEY = "xandora_retail_console_session";
+  const REMEMBERED_EMAIL_KEY = "xandora_retail_console_email";
 
   const state = {
     activeView: "billing",
     runtimeMode: "demo",
     sessionId: localStorage.getItem(SESSION_STORAGE_KEY) || "",
+    rememberedEmail: localStorage.getItem(REMEMBERED_EMAIL_KEY) || "",
     session: null,
     pendingStores: [],
+    authMode: "login",
     cart: { items: [], count: 0, total: 0, currency: "LKR" },
     inZone: [],
     inventory: [],
@@ -26,6 +29,7 @@
     apiStatus: $("api-status"),
     sessionUser: $("session-user"),
     sessionStore: $("session-store"),
+    switchStoreBtn: $("switch-store-btn"),
     logoutBtn: $("logout-btn"),
     bridgeStatus: $("bridge-status"),
     simStatus: $("sim-status"),
@@ -170,12 +174,14 @@
     setStoredSessionId("");
     state.session = null;
     state.pendingStores = [];
+    state.authMode = "login";
     if (state.events) {
       state.events.close();
       state.events = null;
     }
     refs.sessionUser.hidden = true;
     refs.sessionStore.hidden = true;
+    refs.switchStoreBtn.hidden = true;
     refs.logoutBtn.hidden = true;
   }
 
@@ -184,6 +190,7 @@
     if (!summary?.authenticated) {
       refs.sessionUser.hidden = true;
       refs.sessionStore.hidden = true;
+      refs.switchStoreBtn.hidden = true;
       refs.logoutBtn.hidden = true;
       return;
     }
@@ -192,6 +199,7 @@
     refs.sessionUser.textContent = summary.user?.email || "Signed in";
     refs.sessionStore.hidden = false;
     refs.sessionStore.textContent = summary.selected_store_id || "Select store";
+    refs.switchStoreBtn.hidden = !Array.isArray(summary.stores) || summary.stores.length < 2;
     refs.logoutBtn.hidden = false;
   }
 
@@ -211,17 +219,33 @@
     refs.clearStocktakeBtn.disabled = !hasStockAudit;
   }
 
-  function showAuthModal(message, stores = []) {
+  function setRememberedEmail(email) {
+    state.rememberedEmail = String(email || "").trim();
+    if (state.rememberedEmail) {
+      localStorage.setItem(REMEMBERED_EMAIL_KEY, state.rememberedEmail);
+    } else {
+      localStorage.removeItem(REMEMBERED_EMAIL_KEY);
+    }
+  }
+
+  function showAuthModal(message, stores = [], mode = "login") {
     refs.authMessage.textContent =
       message || "Sign in with your Xandora account to open your customer store.";
+    state.authMode = mode;
     state.pendingStores = Array.isArray(stores) ? stores : [];
     refs.authStoreWrap.hidden = !state.pendingStores.length;
     refs.authStore.innerHTML = state.pendingStores
       .map((storeId) => `<option value="${escapeHtml(storeId)}">${escapeHtml(storeId)}</option>`)
       .join("");
+    refs.authEmail.value = state.rememberedEmail || refs.authEmail.value || "";
+    refs.authPassword.value = "";
     refs.authPassword.disabled = Boolean(state.pendingStores.length);
     refs.authEmail.disabled = Boolean(state.pendingStores.length);
-    refs.authSubmit.textContent = state.pendingStores.length ? "Open Store" : "Sign in";
+    refs.authSubmit.textContent = state.pendingStores.length
+      ? mode === "switch-store"
+        ? "Switch Store"
+        : "Open Store"
+      : "Sign in";
     refs.authModal.hidden = false;
   }
 
@@ -232,6 +256,19 @@
     refs.authStoreWrap.hidden = true;
     refs.authStore.innerHTML = "";
     refs.authSubmit.textContent = "Sign in";
+    state.authMode = "login";
+  }
+
+  async function selectStore(storeId) {
+    const session = await apiPost("/api/session/select-store", {
+      store_id: String(storeId || "").trim(),
+    });
+    state.session = session;
+    hideAuthModal();
+    updateSessionChrome();
+    applyProductVisibility();
+    connectEvents();
+    await refreshAll();
   }
 
   async function apiRequest(method, path, body) {
@@ -697,23 +734,17 @@
     try {
       if (state.pendingStores.length) {
         const selectedStore = String(refs.authStore.value || "").trim();
-        const session = await apiPost("/api/session/select-store", {
-          store_id: selectedStore,
-        });
-        state.session = session;
-        hideAuthModal();
-        updateSessionChrome();
-        applyProductVisibility();
-        connectEvents();
-        await refreshAll();
+        await selectStore(selectedStore);
         return;
       }
+
+      const email = refs.authEmail.value.trim().toLowerCase();
 
       const response = await fetch("/api/session/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          email: refs.authEmail.value.trim(),
+          email,
           password: refs.authPassword.value,
         }),
       });
@@ -722,6 +753,7 @@
         throw new Error(body?.error || "Login failed");
       }
 
+      setRememberedEmail(email);
       setStoredSessionId(body.session_id);
       state.session = body;
 
@@ -776,6 +808,11 @@
     refs.assignmentRefreshBtn.addEventListener("click", () => refreshAssignments());
     refs.recentEpcsRefreshBtn.addEventListener("click", () => refreshRecentEpcs());
     refs.simToggleBtn.addEventListener("click", toggleSimulator);
+    refs.switchStoreBtn.addEventListener("click", () => {
+      const stores = Array.isArray(state.session?.stores) ? state.session.stores : [];
+      if (stores.length < 2) return;
+      showAuthModal("Choose the store you want to switch to.", stores, "switch-store");
+    });
     refs.logoutBtn.addEventListener("click", async () => {
       try {
         if (state.sessionId) {

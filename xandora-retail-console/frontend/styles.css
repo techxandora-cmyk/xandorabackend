@@ -575,6 +575,10 @@ th {
   font-weight: 700;
 }
 
+#switch-store-btn {
+  white-space: nowrap;
+}
+
 .recent-epcs-wrap {
   height: 245px;
   overflow-y: auto;
