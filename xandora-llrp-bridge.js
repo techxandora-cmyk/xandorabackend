@@ -747,6 +747,7 @@ function startZoneMonitor() {
       });
 
       tagSessions.delete(epc);
+      seenTags.delete(epc); // allow re-send when tag re-enters zone
     }
   }, 1000);
 }

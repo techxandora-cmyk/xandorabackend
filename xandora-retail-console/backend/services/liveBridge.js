@@ -49,7 +49,7 @@ class LiveBridge {
 
     let url;
     try {
-      url = new URL("/api/v1/events", this.mainApiUrl);
+      url = new URL("/api/v1/events/stream", this.mainApiUrl);
     } catch (_err) {
       console.error("[liveBridge] Invalid MAIN_API_URL:", this.mainApiUrl);
       return;
