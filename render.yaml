@@ -30,6 +30,8 @@ services:
         generateValue: true
       - key: DEVICE_API_KEY
         generateValue: true
+      - key: AUTO_CREATE_CATALOG_FROM_SCANS
+        value: "0"
 
   - type: web
     name: xandora-retail-console
