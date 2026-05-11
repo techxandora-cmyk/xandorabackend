@@ -179,7 +179,6 @@
       state.events.close();
       state.events = null;
     }
-    refs.sessionUser.hidden = true;
     refs.sessionStore.hidden = true;
     refs.switchStoreBtn.hidden = true;
     refs.logoutBtn.hidden = true;
@@ -188,15 +187,12 @@
   function updateSessionChrome() {
     const summary = state.session;
     if (!summary?.authenticated) {
-      refs.sessionUser.hidden = true;
       refs.sessionStore.hidden = true;
       refs.switchStoreBtn.hidden = true;
       refs.logoutBtn.hidden = true;
       return;
     }
 
-    refs.sessionUser.hidden = false;
-    refs.sessionUser.textContent = summary.user?.email || "Signed in";
     refs.sessionStore.hidden = false;
     refs.sessionStore.textContent = summary.selected_store_id || "Select store";
     refs.switchStoreBtn.hidden = !Array.isArray(summary.stores) || summary.stores.length < 2;
