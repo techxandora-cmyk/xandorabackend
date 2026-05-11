@@ -78,6 +78,22 @@ function createRetailState() {
   return state;
 }
 
+function buildSessionDebug(session) {
+  const retailPayload = session?.retailPayload || {};
+  return {
+    retail_claim_store_ids: Array.isArray(retailPayload?.store_ids)
+      ? retailPayload.store_ids.map(normalizeStoreId).filter(Boolean)
+      : [],
+    retail_claim_default_store_id: normalizeStoreId(retailPayload?.default_store_id),
+    retail_claim_roles: Array.isArray(retailPayload?.roles) ? retailPayload.roles : [],
+    retail_claim_product_key: String(retailPayload?.product_key || "").trim() || null,
+    retail_claim_company_name: String(retailPayload?.company_name || "").trim() || null,
+    derived_store_ids: Array.isArray(session?.storeIds) ? session.storeIds : [],
+    selected_store_id: session?.selectedStoreId || null,
+    token_expires_at_unix: Number(session?.retailTokenExp || 0) || null,
+  };
+}
+
 function sessionSummary(session) {
   return {
     ok: true,
@@ -88,6 +104,7 @@ function sessionSummary(session) {
     stores: session.storeIds,
     selected_store_id: session.selectedStoreId || null,
     products: session.products,
+    debug: buildSessionDebug(session),
   };
 }
 
@@ -504,6 +521,8 @@ app.post("/api/session/login", async (req, res) => {
       id: sessionId,
       createdAt: Date.now(),
       lastSeenAt: Date.now(),
+      retailPayload,
+      retailTokenExp: parseJwtExpiry(tokens.retail),
       user: {
         email: retailPayload?.email || email,
         company_name: retailPayload?.company_name || null,
