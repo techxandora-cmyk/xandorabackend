@@ -351,28 +351,15 @@ app.post("/api/live/scan", (req, res) => {
     return res.status(400).json({ error: "epc is required" });
   }
 
-  const knownBefore = dataStore.epcToSku.has(epc);
-  const resolved = dataStore.resolveOrAssignByEpc(epc, { persist: true });
-  if (!resolved?.item) {
-    return res.status(500).json({ error: "Unable to map EPC to a product" });
+  recentLiveEpcs.set(epc, { epc, seenAt: Date.now() });
+
+  const item = dataStore.resolveByEpc(epc);
+  if (!item) {
+    return res.json({ ok: true, assigned: false, epc });
   }
 
-  if (!knownBefore) {
-    rememberKnownEpc(epc);
-    broadcast({
-      type: "live.auto_assigned",
-      epc,
-      sku: resolved.item.sku,
-      at: Date.now(),
-    });
-  }
-
-  const seen = zoneTracker.touch(resolved.item, Date.now());
-  return res.json({
-    ok: true,
-    item: seen,
-    autoAssigned: resolved.autoAssigned,
-  });
+  const seen = zoneTracker.touch(item, Date.now());
+  return res.json({ ok: true, assigned: true, item: seen });
 });
 
 function ingestScanBatch(req, res, { forceHandheld = false } = {}) {
@@ -399,20 +386,9 @@ function ingestScanBatch(req, res, { forceHandheld = false } = {}) {
     const epc = normalizeEpc(pickIncomingEpc(itemRaw));
     if (!epc) continue;
 
-    const knownBefore = dataStore.epcToSku.has(epc);
-    const resolved = dataStore.resolveOrAssignByEpc(epc, { persist: true });
-    if (!resolved?.item) continue;
-
-    if (!knownBefore) {
-      rememberKnownEpc(epc);
-      autoAssignedCount += 1;
-      broadcast({
-        type: "live.auto_assigned",
-        epc,
-        sku: resolved.item.sku,
-        at: Date.now(),
-      });
-    }
+    recentLiveEpcs.set(epc, { epc, seenAt: Date.now() });
+    const resolved = { item: dataStore.resolveByEpc(epc) };
+    if (!resolved.item) continue;
 
     const isHandheld = shouldTreatAsHandheld({
       forceHandheld,
@@ -596,10 +572,11 @@ app.post("/api/laundry/scan", (req, res) => {
     return res.status(400).json({ ok: false, error: "epc is required" });
   }
 
-  const resolved = dataStore.resolveOrAssignByEpc(epc, { persist: true });
-  if (!resolved?.item) {
-    return res.status(500).json({ ok: false, error: "Unable to map EPC to a laundry item" });
+  const resolvedItem = dataStore.resolveByEpc(epc);
+  if (!resolvedItem) {
+    return res.status(404).json({ ok: false, error: "EPC not assigned to a product yet" });
   }
+  const resolved = { item: resolvedItem };
 
   rememberKnownEpc(epc);
   const row = laundryStore.touch(resolved.item, {
