@@ -20,6 +20,7 @@ const MIGRATION_ORDER = [
   "20260510_force_password_change.sql",
   "20260510_cleanup_master_admin_store_roles.sql",
   "20260511_fix_colombo_token.sql",
+  "20260511_clear_demo_data.sql",
 ];
 
 const CORE_READY_TABLES = [
