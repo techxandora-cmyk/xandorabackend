@@ -517,7 +517,10 @@ module.exports = function buildCatalogRoutes(pool) {
       await ensureCatalogTable(client);
       await client.query("BEGIN");
 
+      // Manual assignment should always promote a tag out of the auto-mapped bucket
+      // so it becomes visible across catalog, stock, POS, and assignment views.
       const metadata = {
+        auto_mapped: false,
         ...(barcode ? { barcode } : {}),
         ...(bin ? { bin } : {}),
         ...(notes ? { notes } : {}),
@@ -552,7 +555,7 @@ module.exports = function buildCatalogRoutes(pool) {
           size_label = EXCLUDED.size_label,
           color = EXCLUDED.color,
           price_lkr = EXCLUDED.price_lkr,
-          metadata = COALESCE(catalog_items.metadata, '{}'::jsonb) || EXCLUDED.metadata,
+          metadata = (COALESCE(catalog_items.metadata, '{}'::jsonb) - 'auto_mapped') || EXCLUDED.metadata,
           updated_at = NOW()
         RETURNING
           store_id,

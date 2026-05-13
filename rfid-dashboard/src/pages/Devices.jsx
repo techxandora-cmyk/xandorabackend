@@ -466,7 +466,8 @@ export default function Devices() {
       const loadedDevicesRaw = Array.isArray(devicesRes?.devices) ? devicesRes.devices : [];
       const loadedDevices = loadedDevicesRaw
         .map(shapeDeviceRow)
-        .filter((d) => Boolean(d.device_id));
+        .filter((d) => Boolean(d.device_id))
+        .filter((d) => d.device_id !== "RETAIL_CONSOLE_01");
 
       const nextDrafts = {};
       for (const d of loadedDevices) {
