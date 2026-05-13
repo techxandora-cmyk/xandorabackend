@@ -17,6 +17,8 @@ const EMPTY_SUMMARY = {
   read_rate: 0,
 };
 
+const LIVE_SCAN_WINDOW_MINUTES = 5;
+
 function fmtTime(ts) {
   if (!ts) return "-";
   try {
@@ -105,13 +107,26 @@ export default function BillingPanel() {
 
     try {
       const [scansRes, summaryRes] = await Promise.all([
-        apiGet(`/billing/scans?store_id=${encodeURIComponent(sid)}`),
+        apiGet(
+          `/billing/scans?store_id=${encodeURIComponent(sid)}&minutes=${LIVE_SCAN_WINDOW_MINUTES}`
+        ),
         apiGet(`/billing/summary?store_id=${encodeURIComponent(sid)}`),
       ]);
 
-      setScans(Array.isArray(scansRes?.scans) ? scansRes.scans : []);
+      const source = String(scansRes?.source || "active_session");
+      const cutoff = Date.now() - LIVE_SCAN_WINDOW_MINUTES * 60 * 1000;
+      const scanRows = Array.isArray(scansRes?.scans) ? scansRes.scans : [];
+      const liveRows =
+        source === "recent_scans"
+          ? scanRows.filter((scan) => {
+              const seenAt = Date.parse(scan?.last_seen || scan?.first_seen);
+              return Number.isFinite(seenAt) && seenAt >= cutoff;
+            })
+          : scanRows;
+
+      setScans(liveRows);
       setSession(scansRes?.session || summaryRes?.session || null);
-      setScanSource(String(scansRes?.source || "active_session"));
+      setScanSource(source);
       setSummary(summaryRes?.summary || EMPTY_SUMMARY);
     } catch (err) {
       console.error("[BillingPanel] load failed:", err);
@@ -453,14 +468,14 @@ export default function BillingPanel() {
         <div className="mb-2 text-xs">
           {scanSource === "active_session"
             ? `Active Session Items (${scans.length})`
-            : `Recent Validated Scans (${scans.length})`}
+            : `Live Validated Scans - Last ${LIVE_SCAN_WINDOW_MINUTES} min (${scans.length})`}
         </div>
 
         {scans.length === 0 ? (
           <div className="text-xs opacity-60">
             {hasActive
               ? "Waiting for confirmed EPC reads from the active billing session."
-              : "No recent validated scans for this store yet."}
+              : `No live validated scans in the last ${LIVE_SCAN_WINDOW_MINUTES} minutes.`}
           </div>
         ) : (
           <div className="overflow-x-auto">

@@ -352,8 +352,12 @@ module.exports = function buildBillingRoutes(pool) {
     return liveFeedInsert.rows[0] || null;
   }
 
-  async function buildScanRows(db, storeId, session) {
+  async function buildScanRows(db, storeId, session, options = {}) {
     await ensureCatalogTable(db);
+    const windowMinutes = Math.min(
+      Math.max(Number(options.windowMinutes || 5), 1),
+      10080
+    );
 
     if (!session) {
       const recent = await db.query(
@@ -376,7 +380,7 @@ module.exports = function buildBillingRoutes(pool) {
           ON c.store_id = $1
          AND c.epc = s.tag
         WHERE s.store_id = $1
-          AND COALESCE(s.last_seen, s.ts) >= NOW() - INTERVAL '24 hours'
+          AND COALESCE(s.last_seen, s.ts) >= NOW() - ($2::int * INTERVAL '1 minute')
         GROUP BY
           s.tag,
           c.sku,
@@ -389,7 +393,7 @@ module.exports = function buildBillingRoutes(pool) {
         ORDER BY MAX(COALESCE(s.last_seen, s.ts)) DESC
         LIMIT 200
         `,
-        [storeId]
+        [storeId, windowMinutes]
       );
 
       const rows = [];
@@ -408,6 +412,7 @@ module.exports = function buildBillingRoutes(pool) {
 
       return {
         source: "recent_scans",
+        window_minutes: windowMinutes,
         rows,
       };
     }
@@ -441,6 +446,7 @@ module.exports = function buildBillingRoutes(pool) {
 
     return {
       source: "active_session",
+      window_minutes: null,
       rows: result.rows.map((row) => ({
         ...row,
         validation_label: row.validation_status
@@ -727,8 +733,10 @@ module.exports = function buildBillingRoutes(pool) {
       const storeId = await enforceStore(req, res);
       if (!storeId) return;
 
+      const requestedMinutes = Number(req.query.minutes || 5);
+      const windowMinutes = Math.min(Math.max(requestedMinutes, 1), 10080);
       const session = await getActiveSession(pool, storeId);
-      const scanData = await buildScanRows(pool, storeId, session);
+      const scanData = await buildScanRows(pool, storeId, session, { windowMinutes });
       const summary = session ? await loadBillingSessionSummary(pool, session) : null;
 
       return res.json({
@@ -736,6 +744,7 @@ module.exports = function buildBillingRoutes(pool) {
         session: summary,
         scans: scanData.rows,
         source: scanData.source,
+        window_minutes: scanData.window_minutes,
       });
     } catch (err) {
       console.error("[billing/scans]", err);
