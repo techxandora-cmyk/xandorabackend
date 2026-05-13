@@ -1,7 +1,7 @@
 ﻿import { useEffect, useMemo, useRef, useState } from "react";
 import { apiGet } from "@/lib/api";
 
-const LIVE_SCAN_WINDOW_MINUTES = 5;
+const LIVE_SCAN_WINDOW_MINUTES = 1;
 
 function fmtTime(ts) {
   if (!ts) return "-";

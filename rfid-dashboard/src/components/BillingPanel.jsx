@@ -17,7 +17,7 @@ const EMPTY_SUMMARY = {
   read_rate: 0,
 };
 
-const LIVE_SCAN_WINDOW_MINUTES = 5;
+const LIVE_SCAN_WINDOW_MINUTES = 1;
 
 function fmtTime(ts) {
   if (!ts) return "-";
