@@ -59,7 +59,7 @@ const SCAN_MIN_RSSI = Number.isFinite(Number(process.env.SCAN_MIN_RSSI))
   ? Number(process.env.SCAN_MIN_RSSI)
   : null;
 const AUTO_CREATE_CATALOG_FROM_SCANS =
-  String(process.env.AUTO_CREATE_CATALOG_FROM_SCANS || "1").trim() !== "0";
+  String(process.env.AUTO_CREATE_CATALOG_FROM_SCANS || "0").trim() !== "0";
 
 module.exports = function buildScanRoutes(pool) {
   const router = express.Router();

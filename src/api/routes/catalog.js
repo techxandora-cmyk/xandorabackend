@@ -12,6 +12,7 @@ const BARCODE_SQL = `
     NULLIF(TRIM(metadata->>'bar_code'), '')
   )
 `;
+const REAL_CATALOG_ROW_SQL = `LOWER(COALESCE(metadata->>'auto_mapped', 'false')) <> 'true'`;
 
 function normalizeEpc(v) {
   return String(v || "").trim().toUpperCase();
@@ -134,6 +135,7 @@ module.exports = function buildCatalogRoutes(pool) {
       FROM catalog_items
       WHERE store_id = $1
         AND epc = ANY($2::varchar[])
+        AND ${REAL_CATALOG_ROW_SQL}
       ORDER BY epc ASC
       `,
       [storeId, epcs]
@@ -176,6 +178,7 @@ module.exports = function buildCatalogRoutes(pool) {
           ${BARCODE_SQL} AS barcode
         FROM catalog_items
         WHERE store_id = $1
+          AND ${REAL_CATALOG_ROW_SQL}
         ORDER BY product_name ASC, epc ASC
         LIMIT $2
         `,
@@ -234,6 +237,7 @@ module.exports = function buildCatalogRoutes(pool) {
           FROM catalog_items
           WHERE store_id = $1
             AND epc = $2
+            AND ${REAL_CATALOG_ROW_SQL}
           LIMIT 1
           `,
           [store_id, epc]
@@ -255,6 +259,7 @@ module.exports = function buildCatalogRoutes(pool) {
           FROM catalog_items
           WHERE store_id = $1
             AND UPPER(COALESCE(${BARCODE_SQL}, '')) = $2
+            AND ${REAL_CATALOG_ROW_SQL}
           `,
           [store_id, barcode]
         ),
@@ -276,6 +281,7 @@ module.exports = function buildCatalogRoutes(pool) {
           FROM catalog_items
           WHERE store_id = $1
             AND UPPER(COALESCE(${BARCODE_SQL}, '')) = $2
+            AND ${REAL_CATALOG_ROW_SQL}
           ORDER BY product_name ASC, epc ASC
           LIMIT $3
           `,

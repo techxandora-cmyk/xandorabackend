@@ -29,6 +29,7 @@ async function loadCatalogItem(db, storeId, epc) {
     FROM catalog_items
     WHERE store_id = $1
       AND epc = $2
+      AND LOWER(COALESCE(metadata->>'auto_mapped', 'false')) <> 'true'
     LIMIT 1
     `,
     [storeId, epc]
