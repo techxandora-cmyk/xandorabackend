@@ -231,6 +231,10 @@ router.get("/cart-items", authenticate, async (req, res) => {
     const store_id = req.query.store_id ? String(req.query.store_id) : null;
     const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 200, 1), 1000);
     const hours = Math.min(Math.max(parseInt(req.query.hours, 10) || 24, 1), 168);
+    const requestedMinutes = parseInt(req.query.minutes, 10);
+    const windowMinutes = Number.isFinite(requestedMinutes)
+      ? Math.min(Math.max(requestedMinutes, 1), 10080)
+      : hours * 60;
 
     if (!store_id) {
       return res.status(400).json({ ok: false, error: "store_id required" });
@@ -285,7 +289,7 @@ router.get("/cart-items", authenticate, async (req, res) => {
            AND c.epc = s.tag
            AND LOWER(COALESCE(c.metadata->>'auto_mapped', 'false')) <> 'true'
           WHERE s.store_id = $1
-            AND COALESCE(s.last_seen, s.ts) >= NOW() - ($3::int * INTERVAL '1 hour')
+            AND COALESCE(s.last_seen, s.ts) >= NOW() - ($3::int * INTERVAL '1 minute')
           GROUP BY
             s.tag,
             c.sku,
@@ -298,7 +302,7 @@ router.get("/cart-items", authenticate, async (req, res) => {
           ORDER BY MAX(COALESCE(s.last_seen, s.ts)) DESC
           LIMIT $2
           `,
-          [store_id, limit, hours]
+          [store_id, limit, windowMinutes]
         )
       : await pool.query(
           `
@@ -332,12 +336,12 @@ router.get("/cart-items", authenticate, async (req, res) => {
             ) AS sold_before
           FROM scan_items s
           WHERE s.store_id = $1
-            AND COALESCE(s.last_seen, s.ts) >= NOW() - ($3::int * INTERVAL '1 hour')
+            AND COALESCE(s.last_seen, s.ts) >= NOW() - ($3::int * INTERVAL '1 minute')
           GROUP BY s.tag
           ORDER BY MAX(COALESCE(s.last_seen, s.ts)) DESC
           LIMIT $2
           `,
-          [store_id, limit, hours]
+          [store_id, limit, windowMinutes]
         );
 
     const items = result.rows.map((row) => ({
@@ -348,6 +352,7 @@ router.get("/cart-items", authenticate, async (req, res) => {
     return res.json({
       ok: true,
       store_id,
+      window_minutes: windowMinutes,
       count: items.length,
       items,
     });

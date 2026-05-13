@@ -1,6 +1,8 @@
 ﻿import { useEffect, useMemo, useRef, useState } from "react";
 import { apiGet } from "@/lib/api";
 
+const LIVE_SCAN_WINDOW_MINUTES = 5;
+
 function fmtTime(ts) {
   if (!ts) return "-";
   try {
@@ -87,9 +89,16 @@ export default function POS() {
     setLoadingCart(true);
     try {
       const r = await apiGet(
-        `/pos/cart-items?store_id=${encodeURIComponent(sid)}&limit=200&hours=24`
+        `/pos/cart-items?store_id=${encodeURIComponent(sid)}&limit=200&minutes=${LIVE_SCAN_WINDOW_MINUTES}`
       );
-      setCartItems(Array.isArray(r?.items) ? r.items : []);
+      const cutoff = Date.now() - LIVE_SCAN_WINDOW_MINUTES * 60 * 1000;
+      const liveItems = Array.isArray(r?.items)
+        ? r.items.filter((item) => {
+            const seenAt = Date.parse(item?.last_seen);
+            return Number.isFinite(seenAt) && seenAt >= cutoff;
+          })
+        : [];
+      setCartItems(liveItems);
     } catch (e) {
       setCartItems([]);
     } finally {
@@ -207,9 +216,9 @@ export default function POS() {
       <div className="glass rounded-xl border p-5">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <div className="text-sm font-semibold">Scanned Items (Last 24h)</div>
+            <div className="text-sm font-semibold">Live Scanned Items</div>
             <div className="text-[11px] opacity-50 mt-0.5">
-              RFID tags read by your readers — {scannedItems.total} items detected
+              RFID tags read in the last {LIVE_SCAN_WINDOW_MINUTES} minutes — {scannedItems.total} items detected
             </div>
           </div>
           <button
