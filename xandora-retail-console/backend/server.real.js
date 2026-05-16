@@ -8,6 +8,7 @@ const https = require("https");
 const { ZoneTracker } = require("./services/zoneTracker");
 const { CartStore } = require("./services/cartStore");
 const { StocktakeStore } = require("./services/stocktakeStore");
+const { LaundryStore } = require("./services/laundryStore");
 
 const PORT = Number(process.env.PORT || 4300);
 const HOST = process.env.HOST || "0.0.0.0";
@@ -67,6 +68,7 @@ function createRetailState() {
     zoneTracker,
     cartStore: new CartStore(),
     stocktakeStore: new StocktakeStore(),
+    laundryStore: new LaundryStore(),
     recentLiveEpcs: new Map(),
     savedAssignments: new Map(),
     sseClients: new Set(),
@@ -357,6 +359,7 @@ async function ingestLiveScan(session, epc) {
   broadcastToState(session.state, {
     type: "live.scan",
     epc: normalized,
+    item: item ? toZoneItem(item) : null,
     at: Date.now(),
   });
 
@@ -392,13 +395,15 @@ function mapLaundryStatusToAction(status) {
 
 function mapLaundrySummary(items = []) {
   const byStatus = {};
+  let totalScanEvents = 0;
   for (const item of items) {
     const key = String(item.status || "UNKNOWN");
     byStatus[key] = (byStatus[key] || 0) + 1;
+    totalScanEvents += Number(item.scans || 1);
   }
   return {
     uniqueEpcs: items.length,
-    totalScanEvents: items.length,
+    totalScanEvents,
     byStatus,
   };
 }
@@ -722,7 +727,16 @@ app.post("/api/pos/cart/add", requireSession, requireSelectedStore, async (req, 
     return res.status(404).json({ ok: false, error: `Unknown EPC: ${epc}` });
   }
 
-  return res.json(req.retailSession.state.cartStore.add(item));
+  const cart = req.retailSession.state.cartStore.add(item);
+  const removed = req.retailSession.state.zoneTracker.remove(epc, "cart", Date.now());
+  broadcastToState(req.retailSession.state, {
+    type: "pos.cart.added",
+    epc,
+    item,
+    removed,
+    at: Date.now(),
+  });
+  return res.json(cart);
 });
 
 app.post("/api/pos/cart/remove", requireSession, (req, res) => {
@@ -730,7 +744,19 @@ app.post("/api/pos/cart/remove", requireSession, (req, res) => {
   if (!epc) {
     return res.status(400).json({ ok: false, error: "epc is required" });
   }
-  return res.json(req.retailSession.state.cartStore.remove(epc));
+  const item = req.retailSession.state.cartStore.get(epc);
+  const cart = req.retailSession.state.cartStore.remove(epc);
+  let restored = null;
+  if (item) {
+    restored = req.retailSession.state.zoneTracker.touch(item, Date.now());
+  }
+  broadcastToState(req.retailSession.state, {
+    type: "pos.cart.removed",
+    epc,
+    item: restored || item,
+    at: Date.now(),
+  });
+  return res.json({ ...cart, restored_item: restored || item });
 });
 
 app.post("/api/pos/cart/clear", requireSession, (_req, res) =>
@@ -805,8 +831,9 @@ app.post("/api/inventory/stocktake/scan", requireSession, requireSelectedStore, 
     });
 
     const item = await lookupCatalogItem(req.retailSession, epc);
+    let row = null;
     if (item) {
-      req.retailSession.state.stocktakeStore.touch(toZoneItem(item), {
+      row = req.retailSession.state.stocktakeStore.touch(toZoneItem(item), {
         device_id: RETAIL_DEVICE_ID,
         store_id: req.retailSession.selectedStoreId,
       });
@@ -821,10 +848,11 @@ app.post("/api/inventory/stocktake/scan", requireSession, requireSelectedStore, 
     broadcastToState(req.retailSession.state, {
       type: "inventory.stocktake_scan",
       epc,
+      item: row,
       at: Date.now(),
     });
 
-    return res.json({ ok: true, epc, item });
+    return res.json({ ok: true, epc, item, row });
   } catch (err) {
     return res.status(500).json({ ok: false, error: err.message });
   }
@@ -857,7 +885,7 @@ app.get("/api/laundry/items", requireSession, requireSelectedStore, async (req, 
       ),
     ]);
 
-    const items = Array.isArray(itemsBody?.items)
+    const backendItems = Array.isArray(itemsBody?.items)
       ? itemsBody.items.map((item) => ({
           epc: item.epc,
           sku: item.item_code || "",
@@ -869,13 +897,33 @@ app.get("/api/laundry/items", requireSession, requireSelectedStore, async (req, 
           last_seen_iso: item.last_event_at || item.created_at || new Date().toISOString(),
         }))
       : [];
+    const localItems = req.retailSession.state.laundryStore.list();
+    const byEpc = new Map();
+    for (const item of backendItems) {
+      const epc = normalizeEpc(item.epc);
+      if (epc) byEpc.set(epc, { ...item, epc });
+    }
+    for (const item of localItems) {
+      const epc = normalizeEpc(item.epc);
+      if (epc) byEpc.set(epc, { ...(byEpc.get(epc) || {}), ...item, epc });
+    }
+    const items = [...byEpc.values()].sort((a, b) =>
+      String(b.last_seen_iso || "").localeCompare(String(a.last_seen_iso || ""))
+    );
 
     return res.json({
       items,
-      summary: summaryBody?.summary || mapLaundrySummary(items),
+      summary: mapLaundrySummary(items),
+      backend_summary: summaryBody?.summary || null,
     });
   } catch (err) {
-    return res.status(500).json({ ok: false, error: err.message });
+    const items = req.retailSession.state.laundryStore.list();
+    return res.json({
+      items,
+      summary: mapLaundrySummary(items),
+      persisted: false,
+      warning: err.message,
+    });
   }
 });
 
@@ -890,38 +938,59 @@ app.post("/api/laundry/scan", requireSession, requireSelectedStore, async (req, 
       return res.status(400).json({ ok: false, error: "epc is required" });
     }
 
-    const action = mapLaundryStatusToAction(req.body?.status);
-    const body = await authorizedFetch(req.retailSession, "laundry", "/api/v1/laundry/actions", {
-      method: "POST",
-      body: JSON.stringify({
-        store_id: req.retailSession.selectedStoreId,
-        action,
-        epcs: [epc],
-        location_label: "Retail Console",
-      }),
-    });
+    const status = String(req.body?.status || "Received").trim() || "Received";
+    const action = mapLaundryStatusToAction(status);
+    let body = null;
+    let persisted = true;
+    try {
+      body = await authorizedFetch(req.retailSession, "laundry", "/api/v1/laundry/actions", {
+        method: "POST",
+        body: JSON.stringify({
+          store_id: req.retailSession.selectedStoreId,
+          action,
+          epcs: [epc],
+          location_label: "Retail Console",
+        }),
+      });
+    } catch (_err) {
+      persisted = false;
+    }
+
+    const item = await lookupCatalogItem(req.retailSession, epc);
+    if (!item && !persisted) {
+      return res.status(404).json({ ok: false, error: `Unknown EPC: ${epc}` });
+    }
+    const row = item
+      ? req.retailSession.state.laundryStore.touch(toZoneItem(item), {
+          status,
+          device_id: RETAIL_DEVICE_ID,
+          store_id: req.retailSession.selectedStoreId,
+        })
+      : null;
 
     rememberRecentEpc(req.retailSession.state, epc, {
       source: "Laundry",
-      assigned: true,
-      item: null,
+      assigned: Boolean(item) || persisted,
+      item,
     });
 
     broadcastToState(req.retailSession.state, {
       type: "laundry.scan",
       epc,
+      item: row,
       at: Date.now(),
     });
 
-    return res.json({ ok: true, items: body?.items || [] });
+    return res.json({ ok: true, epc, item: row, items: body?.items || [], persisted });
   } catch (err) {
     return res.status(500).json({ ok: false, error: err.message });
   }
 });
 
-app.post("/api/laundry/clear", requireSession, (_req, res) =>
-  res.json({ ok: true, cleared: false, persisted: true })
-);
+app.post("/api/laundry/clear", requireSession, (_req, res) => {
+  const summary = _req.retailSession.state.laundryStore.clear();
+  return res.json({ ok: true, cleared: true, persisted: false, summary });
+});
 
 app.get("/api/assignments", requireSession, requireSelectedStore, async (req, res) => {
   try {

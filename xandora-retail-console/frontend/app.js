@@ -440,6 +440,66 @@
       .join("");
   }
 
+  function asInZoneItem(item = {}) {
+    return {
+      epc: String(item.epc || "").toUpperCase(),
+      sku: item.sku || "",
+      name: item.name || item.product_name || "",
+      category: item.category || "",
+      bin: item.bin || "",
+      size: item.size || item.size_label || "",
+      color: item.color || "",
+      price: Number(item.price || item.price_lkr || 0),
+      currency: item.currency || "LKR",
+      ageSec: Number(item.ageSec || 0),
+    };
+  }
+
+  function upsertByEpc(rows, nextItem) {
+    const item = asInZoneItem(nextItem);
+    if (!item.epc) return rows;
+    const filtered = rows.filter((row) => row.epc !== item.epc);
+    return [item, ...filtered];
+  }
+
+  function upsertStocktakeRow(row = {}) {
+    const epc = String(row.epc || "").toUpperCase();
+    if (!epc) return;
+    const next = {
+      ...row,
+      epc,
+      at_iso: row.at_iso || new Date(row.lastSeenAt || Date.now()).toISOString(),
+      device_id: row.device_id || row.deviceId || "-",
+      scans: Number(row.scans || 1),
+    };
+    state.stocktake.items = [next, ...(state.stocktake.items || []).filter((item) => item.epc !== epc)];
+    state.stocktake.summary = {
+      ...(state.stocktake.summary || {}),
+      uniqueEpcs: state.stocktake.items.length,
+      totalScanEvents: state.stocktake.items.reduce((sum, item) => sum + Number(item.scans || 0), 0),
+    };
+    renderStocktake();
+  }
+
+  function upsertLaundryRow(row = {}) {
+    const epc = String(row.epc || "").toUpperCase();
+    if (!epc) return;
+    const next = {
+      ...row,
+      epc,
+      status: row.status || refs.laundryStatus?.value || "Received",
+      last_seen_iso: row.last_seen_iso || new Date(row.lastSeenAt || Date.now()).toISOString(),
+      scans: Number(row.scans || 1),
+    };
+    state.laundry.items = [next, ...(state.laundry.items || []).filter((item) => item.epc !== epc)];
+    state.laundry.summary = {
+      ...(state.laundry.summary || {}),
+      uniqueEpcs: state.laundry.items.length,
+      totalScanEvents: state.laundry.items.reduce((sum, item) => sum + Number(item.scans || 0), 0),
+    };
+    renderLaundry();
+  }
+
   function renderAssignments() {
     if (!state.assignments.length) {
       refs.assignmentsBody.innerHTML = `<tr><td colspan="7" class="empty-row">No assigned tags yet</td></tr>`;
@@ -628,7 +688,7 @@
       refreshLaundry().catch(() => {});
       refreshAssignments().catch(() => {});
       refreshRecentEpcs().catch(() => {});
-    }, 180);
+    }, 25);
   }
 
   function connectEvents() {
@@ -654,10 +714,29 @@
         }
         if (
           type.startsWith("live.") ||
+          type.startsWith("pos.") ||
           type.startsWith("inventory.") ||
           type.startsWith("laundry.") ||
           type.startsWith("assignment.")
         ) {
+          if ((type === "live.scan" || type === "live.enter" || type === "live.touch") && data.item) {
+            state.inZone = upsertByEpc(state.inZone, data.item);
+            renderInZone();
+          }
+          if (type === "inventory.stocktake_scan" && data.item) {
+            upsertStocktakeRow(data.item);
+          }
+          if (type === "laundry.scan" && data.item) {
+            upsertLaundryRow(data.item);
+          }
+          if (type === "pos.cart.added" && data.epc) {
+            state.inZone = state.inZone.filter((item) => item.epc !== data.epc);
+            renderInZone();
+          }
+          if (type === "pos.cart.removed" && data.item) {
+            state.inZone = upsertByEpc(state.inZone, data.item);
+            renderInZone();
+          }
           scheduleLiveRefresh();
         }
       } catch (_err) {
@@ -867,10 +946,14 @@
       const epc = getManualEpc();
       if (!epc) return;
       try {
-        await apiPost("/api/live/scan", { epc });
+        const result = await apiPost("/api/live/scan", { epc });
+        if (result.item) {
+          state.inZone = upsertByEpc(state.inZone, result.item);
+          renderInZone();
+        }
         refs.manualEpc.value = "";
         pushLog(`Bin scan: ${epc}`);
-        await Promise.all([refreshInZone(), refreshInventory(), refreshAssignments(), refreshRecentEpcs()]);
+        Promise.all([refreshInZone(), refreshInventory(), refreshAssignments(), refreshRecentEpcs()]).catch(() => {});
       } catch (err) {
         pushLog(`Bin scan failed: ${err.message}`);
       }
@@ -880,10 +963,13 @@
       const epc = getManualEpc();
       if (!epc) return;
       try {
-        await apiPost("/api/inventory/stocktake/scan", { epc });
+        const result = await apiPost("/api/inventory/stocktake/scan", { epc });
+        if (result.row || result.item) {
+          upsertStocktakeRow(result.row || result.item);
+        }
         refs.manualEpc.value = "";
         pushLog(`Inventory intake scan: ${epc}`);
-        await Promise.all([refreshStocktake(), refreshInventory(), refreshAssignments(), refreshRecentEpcs()]);
+        Promise.all([refreshStocktake(), refreshInventory(), refreshAssignments(), refreshRecentEpcs()]).catch(() => {});
       } catch (err) {
         pushLog(`Inventory scan failed: ${err.message}`);
       }
@@ -893,13 +979,16 @@
       const epc = getManualEpc();
       if (!epc) return;
       try {
-        await apiPost("/api/laundry/scan", {
+        const result = await apiPost("/api/laundry/scan", {
           epc,
           status: refs.laundryStatus.value,
         });
+        if (result.item) {
+          upsertLaundryRow(result.item);
+        }
         refs.manualEpc.value = "";
         pushLog(`Laundry scan: ${epc}`);
-        await Promise.all([refreshLaundry(), refreshAssignments(), refreshRecentEpcs()]);
+        Promise.all([refreshLaundry(), refreshAssignments(), refreshRecentEpcs()]).catch(() => {});
       } catch (err) {
         pushLog(`Laundry scan failed: ${err.message}`);
       }
@@ -937,8 +1026,11 @@
         const epc = addBtn.getAttribute("data-epc");
         try {
           state.cart = await apiPost("/api/pos/cart/add", { epc });
+          state.inZone = state.inZone.filter((item) => item.epc !== epc);
+          renderInZone();
           renderCart();
           pushLog(`Added to bill: ${epc}`);
+          Promise.all([refreshInZone(), refreshInventory()]).catch(() => {});
         } catch (err) {
           pushLog(`Add to bill failed: ${err.message}`);
         }
@@ -963,9 +1055,15 @@
       if (!removeBtn) return;
       const epc = removeBtn.getAttribute("data-epc");
       try {
-        state.cart = await apiPost("/api/pos/cart/remove", { epc });
+        const result = await apiPost("/api/pos/cart/remove", { epc });
+        state.cart = result;
+        if (result.restored_item) {
+          state.inZone = upsertByEpc(state.inZone, result.restored_item);
+          renderInZone();
+        }
         renderCart();
         pushLog(`Removed from bill: ${epc}`);
+        Promise.all([refreshInZone(), refreshInventory()]).catch(() => {});
       } catch (err) {
         pushLog(`Cart remove failed: ${err.message}`);
       }

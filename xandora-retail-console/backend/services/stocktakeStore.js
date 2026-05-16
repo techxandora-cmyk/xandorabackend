@@ -80,9 +80,15 @@ class StocktakeStore {
 
   recent(limit = 80) {
     const n = Math.min(Math.max(Number(limit || 80), 1), 300);
-    return this.recentEvents.slice(0, n).map((row) => ({
+    return [...this.byEpc.values()]
+      .sort((a, b) => Number(b.lastSeenAt || 0) - Number(a.lastSeenAt || 0))
+      .slice(0, n)
+      .map((row) => ({
       ...row,
-      at_iso: new Date(row.at).toISOString(),
+      at: row.lastSeenAt,
+      at_iso: new Date(row.lastSeenAt).toISOString(),
+      store_id: row.storeId,
+      device_id: row.deviceId,
     }));
   }
 

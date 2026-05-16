@@ -22,6 +22,10 @@ class CartStore {
     return this.snapshot();
   }
 
+  get(epc) {
+    return this.itemsByEpc.get(String(epc)) || null;
+  }
+
   remove(epc) {
     this.itemsByEpc.delete(String(epc));
     return this.snapshot();
