@@ -304,14 +304,28 @@ async function fetchAssignments(session, limit = 1000) {
 async function lookupCatalogItem(session, epc) {
   const normalized = normalizeEpc(epc);
   if (!normalized) return null;
-  const body = await authorizedFetch(
-    session,
-    "retail",
-    `/api/v1/catalog/lookup?store_id=${encodeURIComponent(
-      session.selectedStoreId
-    )}&epc=${encodeURIComponent(normalized)}`
-  );
-  return body?.found && body.item ? toAssignmentItem(body.item) : null;
+  const savedAssignment = session.state.savedAssignments.get(normalized);
+
+  try {
+    const body = await authorizedFetch(
+      session,
+      "retail",
+      `/api/v1/catalog/lookup?store_id=${encodeURIComponent(
+        session.selectedStoreId
+      )}&epc=${encodeURIComponent(normalized)}`
+    );
+    if (body?.found && body.item) {
+      return {
+        ...(savedAssignment || {}),
+        ...toAssignmentItem(body.item),
+        epc: normalized,
+      };
+    }
+  } catch (err) {
+    if (!savedAssignment) throw err;
+  }
+
+  return savedAssignment || null;
 }
 
 async function ingestLiveScan(session, epc) {
@@ -725,7 +739,7 @@ app.post("/api/pos/cart/clear", requireSession, (_req, res) =>
 
 app.get("/api/inventory/summary", requireSession, requireSelectedStore, async (req, res) => {
   try {
-    const items = await fetchCatalog(req.retailSession, 1000);
+    const items = await fetchAssignments(req.retailSession, 1000);
     const grouped = new Map();
     const inZoneBySku = req.retailSession.state.zoneTracker.countBySku();
     const stocktakeBySku = req.retailSession.state.stocktakeStore.countBySku();
