@@ -9,6 +9,7 @@ const { ZoneTracker } = require("./services/zoneTracker");
 const { CartStore } = require("./services/cartStore");
 const { StocktakeStore } = require("./services/stocktakeStore");
 const { LaundryStore } = require("./services/laundryStore");
+const { AssignmentStore } = require("./services/assignmentStore");
 
 const PORT = Number(process.env.PORT || 4300);
 const HOST = process.env.HOST || "0.0.0.0";
@@ -25,6 +26,7 @@ const SESSION_IDLE_MS = Math.max(
   30 * 60 * 1000
 );
 const sharedAssignmentsByStore = new Map();
+const assignmentStore = new AssignmentStore();
 
 if (!MAIN_API_URL) {
   throw new Error("RETAIL_BACKEND_URL or MAIN_API_URL is required for retail real mode");
@@ -137,6 +139,7 @@ function rememberSharedAssignment(storeId, item) {
   const assignments = getSharedAssignments(storeId);
   const next = { ...item, epc };
   assignments.set(epc, next);
+  assignmentStore.upsert(storeId, next);
   return next;
 }
 
@@ -309,6 +312,11 @@ async function fetchAssignments(session, limit = 1000) {
   const catalogItems = await fetchCatalog(session, limit);
   const byEpc = new Map();
 
+  for (const item of assignmentStore.list(session.selectedStoreId)) {
+    const epc = normalizeEpc(item?.epc);
+    if (epc) byEpc.set(epc, { ...item, epc });
+  }
+
   for (const item of catalogItems) {
     const epc = normalizeEpc(item?.epc);
     if (epc) {
@@ -348,7 +356,8 @@ async function lookupCatalogItem(session, epc, options = {}) {
   const normalized = normalizeEpc(epc);
   if (!normalized) return null;
   const sharedAssignment = getSharedAssignments(session.selectedStoreId).get(normalized);
-  const savedAssignment = session.state.savedAssignments.get(normalized) || sharedAssignment;
+  const storedAssignment = assignmentStore.get(session.selectedStoreId, normalized);
+  const savedAssignment = session.state.savedAssignments.get(normalized) || sharedAssignment || storedAssignment;
   if (savedAssignment && !options.forceRemote) {
     return savedAssignment;
   }

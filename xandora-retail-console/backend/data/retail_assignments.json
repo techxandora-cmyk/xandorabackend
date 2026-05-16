@@ -1,0 +1,90 @@
+{
+  "stores": {
+    "COLOMBO_01": [
+      {
+        "epc": "094000000100000126500071",
+        "sku": "SHIRT-EDGE",
+        "name": "EDGE",
+        "category": "Shirt",
+        "bin": "BinA1",
+        "size": "",
+        "color": "",
+        "price": 2290,
+        "currency": "LKR",
+        "stock": 1,
+        "laundryStatus": "Ready",
+        "notes": "Recovered retail assignment"
+      },
+      {
+        "epc": "094000000100000126500079",
+        "sku": "SOCKS-001",
+        "name": "Jobbs",
+        "category": "Socks",
+        "bin": "BinA1",
+        "size": "Free Size",
+        "color": "Black",
+        "price": 590,
+        "currency": "LKR",
+        "stock": 1,
+        "laundryStatus": "Ready",
+        "notes": "Recovered retail assignment"
+      },
+      {
+        "epc": "094000000100000126500080",
+        "sku": "SOCKS-002",
+        "name": "Jobbs",
+        "category": "Socks",
+        "bin": "BinA1",
+        "size": "Free Size",
+        "color": "Black",
+        "price": 590,
+        "currency": "LKR",
+        "stock": 1,
+        "laundryStatus": "Ready",
+        "notes": "Recovered retail assignment"
+      },
+      {
+        "epc": "094000000100000126500083",
+        "sku": "SOCKS-003",
+        "name": "Jobbs",
+        "category": "Socks",
+        "bin": "BinA1",
+        "size": "Free Size",
+        "color": "Black",
+        "price": 590,
+        "currency": "LKR",
+        "stock": 1,
+        "laundryStatus": "Ready",
+        "notes": "Recovered retail assignment"
+      },
+      {
+        "epc": "094000000100000126500084",
+        "sku": "SOCKS-004",
+        "name": "Jobbs",
+        "category": "Socks",
+        "bin": "BinA1",
+        "size": "Free Size",
+        "color": "Black",
+        "price": 590,
+        "currency": "LKR",
+        "stock": 1,
+        "laundryStatus": "Ready",
+        "notes": "Recovered retail assignment"
+      },
+      {
+        "epc": "094000000100000126500085",
+        "sku": "SHIRT-001",
+        "name": "Blug Junior",
+        "category": "Kids",
+        "bin": "BinA1",
+        "size": "6/7Yrs",
+        "color": "Blue",
+        "price": 1890,
+        "currency": "LKR",
+        "stock": 1,
+        "laundryStatus": "Ready",
+        "notes": "Recovered retail assignment"
+      }
+    ]
+  }
+}
