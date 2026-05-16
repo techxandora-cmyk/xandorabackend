@@ -285,7 +285,11 @@ async function fetchAssignments(session, limit = 1000) {
 
   for (const item of catalogItems) {
     const epc = normalizeEpc(item?.epc);
-    if (epc) byEpc.set(epc, { ...item, epc });
+    if (epc) {
+      const next = { ...item, epc };
+      byEpc.set(epc, next);
+      session.state.savedAssignments.set(epc, next);
+    }
   }
 
   for (const item of session.state.savedAssignments.values()) {
@@ -303,10 +307,13 @@ async function fetchAssignments(session, limit = 1000) {
   );
 }
 
-async function lookupCatalogItem(session, epc) {
+async function lookupCatalogItem(session, epc, options = {}) {
   const normalized = normalizeEpc(epc);
   if (!normalized) return null;
   const savedAssignment = session.state.savedAssignments.get(normalized);
+  if (savedAssignment && !options.forceRemote) {
+    return savedAssignment;
+  }
 
   try {
     const body = await authorizedFetch(
@@ -495,6 +502,19 @@ function startLiveBridge() {
               const epc = normalizeEpc(data.tag || data.epc || "");
               if (!epc) continue;
 
+              rememberRecentEpc(session.state, epc, {
+                source: eventName === "scan" ? "Live reader" : "Zone heartbeat",
+                assigned: false,
+                item: null,
+              });
+
+              broadcastToState(session.state, {
+                type: "live.raw",
+                epc,
+                source: eventName === "scan" ? "Live reader" : "Zone heartbeat",
+                at: Date.now(),
+              });
+
               lookupCatalogItem(session, epc)
                 .then((item) => {
                   rememberRecentEpc(session.state, epc, {
@@ -511,6 +531,7 @@ function startLiveBridge() {
                     broadcastToState(session.state, {
                       type: "live.scan",
                       epc,
+                      item: item ? toZoneItem(item) : null,
                       at: Date.now(),
                     });
                   }
@@ -1067,15 +1088,14 @@ app.post("/api/assignments", requireSession, requireSelectedStore, async (req, r
       body: JSON.stringify(payload),
     });
 
-    const persistedItem = await lookupCatalogItem(req.retailSession, epc);
-    if (!body?.ok || !persistedItem?.epc) {
+    const item = toAssignmentItem(body?.item || {});
+    if (!body?.ok || !item.epc) {
       return res.status(500).json({
         ok: false,
-        error: "Assignment was not readable from shared catalog after save",
+        error: "Assignment was not saved to shared catalog",
       });
     }
 
-    const item = toAssignmentItem(persistedItem);
     if (item.epc) {
       req.retailSession.state.savedAssignments.set(normalizeEpc(item.epc), item);
     }

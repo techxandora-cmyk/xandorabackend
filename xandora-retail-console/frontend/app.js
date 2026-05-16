@@ -575,6 +575,22 @@
       .join("");
   }
 
+  function upsertRecentEpc(row = {}) {
+    const epc = String(row.epc || "").toUpperCase();
+    if (!epc) return;
+    const assignedItem = state.assignments.find((item) => item.epc === epc);
+    const next = {
+      epc,
+      source: row.source || "Live reader",
+      seenAt: row.seenAt || Date.now(),
+      seenAtIso: row.seenAtIso || new Date(row.seenAt || Date.now()).toISOString(),
+      assigned: Boolean(row.assigned || assignedItem || row.item),
+      item: row.item || assignedItem || null,
+    };
+    state.recentEpcs = [next, ...state.recentEpcs.filter((item) => item.epc !== epc)].slice(0, 30);
+    renderRecentEpcs();
+  }
+
   async function refreshHealthAndStatus() {
     try {
       const [health, session, status] = await Promise.all([
@@ -733,9 +749,27 @@
           type.startsWith("laundry.") ||
           type.startsWith("assignment.")
         ) {
+          if (type === "live.raw" && data.epc) {
+            upsertRecentEpc({
+              epc: data.epc,
+              source: data.source || "Live reader",
+              seenAt: data.at || Date.now(),
+              seenAtIso: new Date(data.at || Date.now()).toISOString(),
+            });
+          }
           if ((type === "live.scan" || type === "live.enter" || type === "live.touch") && data.item) {
             state.inZone = upsertByEpc(state.inZone, data.item);
             renderInZone();
+          }
+          if (type === "live.scan" && data.epc) {
+            upsertRecentEpc({
+              epc: data.epc,
+              source: "Live reader",
+              seenAt: data.at || Date.now(),
+              seenAtIso: new Date(data.at || Date.now()).toISOString(),
+              assigned: Boolean(data.item),
+              item: data.item || null,
+            });
           }
           if (type === "inventory.stocktake_scan" && data.item) {
             upsertStocktakeRow(data.item);
