@@ -24,6 +24,7 @@ const SESSION_IDLE_MS = Math.max(
   Number(process.env.RETAIL_SESSION_IDLE_MS || 12 * 60 * 60 * 1000),
   30 * 60 * 1000
 );
+const sharedAssignmentsByStore = new Map();
 
 if (!MAIN_API_URL) {
   throw new Error("RETAIL_BACKEND_URL or MAIN_API_URL is required for retail real mode");
@@ -119,6 +120,31 @@ function broadcastToState(state, event) {
     } catch (_err) {
       state.sseClients.delete(res);
     }
+  }
+}
+
+function getSharedAssignments(storeId) {
+  const key = normalizeStoreId(storeId);
+  if (!sharedAssignmentsByStore.has(key)) {
+    sharedAssignmentsByStore.set(key, new Map());
+  }
+  return sharedAssignmentsByStore.get(key);
+}
+
+function rememberSharedAssignment(storeId, item) {
+  const epc = normalizeEpc(item?.epc);
+  if (!epc) return null;
+  const assignments = getSharedAssignments(storeId);
+  const next = { ...item, epc };
+  assignments.set(epc, next);
+  return next;
+}
+
+function broadcastToStoreSessions(storeId, event) {
+  const normalizedStoreId = normalizeStoreId(storeId);
+  for (const session of sessions.values()) {
+    if (normalizeStoreId(session.selectedStoreId) !== normalizedStoreId) continue;
+    broadcastToState(session.state, event);
   }
 }
 
@@ -289,7 +315,18 @@ async function fetchAssignments(session, limit = 1000) {
       const next = { ...item, epc };
       byEpc.set(epc, next);
       session.state.savedAssignments.set(epc, next);
+      rememberSharedAssignment(session.selectedStoreId, next);
     }
+  }
+
+  for (const item of getSharedAssignments(session.selectedStoreId).values()) {
+    const epc = normalizeEpc(item?.epc);
+    if (!epc) continue;
+    byEpc.set(epc, {
+      ...(byEpc.get(epc) || {}),
+      ...item,
+      epc,
+    });
   }
 
   for (const item of session.state.savedAssignments.values()) {
@@ -310,7 +347,8 @@ async function fetchAssignments(session, limit = 1000) {
 async function lookupCatalogItem(session, epc, options = {}) {
   const normalized = normalizeEpc(epc);
   if (!normalized) return null;
-  const savedAssignment = session.state.savedAssignments.get(normalized);
+  const sharedAssignment = getSharedAssignments(session.selectedStoreId).get(normalized);
+  const savedAssignment = session.state.savedAssignments.get(normalized) || sharedAssignment;
   if (savedAssignment && !options.forceRemote) {
     return savedAssignment;
   }
@@ -324,11 +362,13 @@ async function lookupCatalogItem(session, epc, options = {}) {
       )}&epc=${encodeURIComponent(normalized)}`
     );
     if (body?.found && body.item) {
-      return {
+      const item = {
         ...(savedAssignment || {}),
         ...toAssignmentItem(body.item),
         epc: normalized,
       };
+      rememberSharedAssignment(session.selectedStoreId, item);
+      return item;
     }
   } catch (err) {
     if (!savedAssignment) throw err;
@@ -1098,6 +1138,7 @@ app.post("/api/assignments", requireSession, requireSelectedStore, async (req, r
 
     if (item.epc) {
       req.retailSession.state.savedAssignments.set(normalizeEpc(item.epc), item);
+      rememberSharedAssignment(req.retailSession.selectedStoreId, item);
     }
     rememberRecentEpc(req.retailSession.state, item.epc, {
       source: "Assignment saved",
@@ -1105,7 +1146,7 @@ app.post("/api/assignments", requireSession, requireSelectedStore, async (req, r
       item,
     });
 
-    broadcastToState(req.retailSession.state, {
+    broadcastToStoreSessions(req.retailSession.selectedStoreId, {
       type: "assignment.saved",
       epc: item.epc,
       item,

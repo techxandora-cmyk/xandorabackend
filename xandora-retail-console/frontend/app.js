@@ -785,6 +785,19 @@
             state.inZone = upsertByEpc(state.inZone, data.item);
             renderInZone();
           }
+          if (type === "assignment.saved" && data.item) {
+            state.assignments = upsertByEpc(state.assignments, data.item);
+            renderAssignments();
+            renderRecentAssigned();
+            upsertRecentEpc({
+              epc: data.item.epc,
+              source: "Assignment saved",
+              seenAt: data.at || Date.now(),
+              seenAtIso: new Date(data.at || Date.now()).toISOString(),
+              assigned: true,
+              item: data.item,
+            });
+          }
           scheduleLiveRefresh();
         }
       } catch (_err) {
