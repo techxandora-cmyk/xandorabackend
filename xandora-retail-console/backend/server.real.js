@@ -1044,9 +1044,10 @@ app.get("/api/assignments/recent-epcs", requireSession, requireSelectedStore, as
 
 app.post("/api/assignments", requireSession, requireSelectedStore, async (req, res) => {
   try {
+    const epc = normalizeEpc(req.body?.epc);
     const payload = {
       store_id: req.retailSession.selectedStoreId,
-      epc: normalizeEpc(req.body?.epc),
+      epc,
       sku: String(req.body?.sku || "").trim() || null,
       product_name: String(req.body?.name || req.body?.product_name || "").trim(),
       brand: String(req.body?.brand || "").trim() || null,
@@ -1066,7 +1067,15 @@ app.post("/api/assignments", requireSession, requireSelectedStore, async (req, r
       body: JSON.stringify(payload),
     });
 
-    const item = toAssignmentItem(body?.item || {});
+    const persistedItem = await lookupCatalogItem(req.retailSession, epc);
+    if (!body?.ok || !persistedItem?.epc) {
+      return res.status(500).json({
+        ok: false,
+        error: "Assignment was not readable from shared catalog after save",
+      });
+    }
+
+    const item = toAssignmentItem(persistedItem);
     if (item.epc) {
       req.retailSession.state.savedAssignments.set(normalizeEpc(item.epc), item);
     }
@@ -1079,10 +1088,11 @@ app.post("/api/assignments", requireSession, requireSelectedStore, async (req, r
     broadcastToState(req.retailSession.state, {
       type: "assignment.saved",
       epc: item.epc,
+      item,
       at: Date.now(),
     });
 
-    return res.json({ ok: true, item });
+    return res.json({ ok: true, item, persisted: true });
   } catch (err) {
     return res.status(500).json({ ok: false, error: err.message });
   }

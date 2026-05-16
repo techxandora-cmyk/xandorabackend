@@ -23,6 +23,7 @@
     logLines: [],
     events: null,
     liveRefreshTimer: null,
+    catalogSyncTimer: null,
   };
 
   const refs = {
@@ -264,6 +265,7 @@
     updateSessionChrome();
     applyProductVisibility();
     connectEvents();
+    startSharedCatalogSync();
     await refreshAll();
   }
 
@@ -660,6 +662,18 @@
     renderRecentEpcs();
   }
 
+  function syncSharedCatalog() {
+    if (!state.sessionId) return;
+    Promise.all([refreshAssignments(), refreshInventory(), refreshRecentEpcs()]).catch(() => {});
+  }
+
+  function startSharedCatalogSync() {
+    if (state.catalogSyncTimer) {
+      clearInterval(state.catalogSyncTimer);
+    }
+    state.catalogSyncTimer = setInterval(syncSharedCatalog, 5000);
+  }
+
   async function refreshAll() {
     try {
       await Promise.all([
@@ -844,6 +858,7 @@
       updateSessionChrome();
       applyProductVisibility();
       connectEvents();
+      startSharedCatalogSync();
       await refreshAll();
     } catch (err) {
       showAuthModal(err.message || "Login failed");
@@ -941,6 +956,11 @@
       pushLog("Demo shutdown requested.");
       setTimeout(() => window.close(), 250);
     });
+
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden) syncSharedCatalog();
+    });
+    window.addEventListener("focus", syncSharedCatalog);
 
     refs.manualScanBtn.addEventListener("click", async () => {
       const epc = getManualEpc();
@@ -1116,6 +1136,7 @@
     const restored = await restoreSession();
     if (!restored) return;
     connectEvents();
+    startSharedCatalogSync();
     await refreshAll();
   }
 
