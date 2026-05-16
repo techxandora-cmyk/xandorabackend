@@ -301,7 +301,10 @@
   const apiPost = (path, body = {}) => apiRequest("POST", path, body);
 
   function getManualEpc() {
-    return refs.manualEpc.value.trim().toUpperCase();
+    return (
+      refs.manualEpc.value.trim() ||
+      refs.assignEpc.value.trim()
+    ).toUpperCase();
   }
 
   function renderInZone() {
