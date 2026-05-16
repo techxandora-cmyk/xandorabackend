@@ -699,6 +699,29 @@
     renderRecentEpcs();
   }
 
+  async function refreshBilling() {
+    await Promise.all([refreshInZone(), refreshCart(), refreshRecentEpcs()]);
+  }
+
+  async function refreshActiveView() {
+    try {
+      if (state.activeView === "billing") {
+        await refreshBilling();
+      } else if (state.activeView === "inventory") {
+        await Promise.all([refreshInventory(), refreshStocktake()]);
+      } else if (state.activeView === "laundry") {
+        await refreshLaundry();
+      } else if (state.activeView === "assign") {
+        await Promise.all([refreshAssignments(), refreshRecentEpcs(), refreshInventory()]);
+      } else {
+        await refreshAll();
+      }
+    } catch (err) {
+      pushLog(`Refresh failed: ${err.message}`);
+      setApiOnline(false);
+    }
+  }
+
   function syncSharedCatalog() {
     if (!state.sessionId) return;
     Promise.all([refreshAssignments(), refreshInventory(), refreshRecentEpcs()]).catch(() => {});
@@ -740,15 +763,32 @@
     }
   }
 
-  function scheduleLiveRefresh() {
+  function scheduleLiveRefresh(scope = "live") {
     if (state.liveRefreshTimer) return;
     state.liveRefreshTimer = setTimeout(() => {
       state.liveRefreshTimer = null;
+      if (scope === "pos") {
+        refreshCart().catch(() => {});
+        refreshInZone().catch(() => {});
+        refreshInventory().catch(() => {});
+        return;
+      }
+      if (scope === "assignment") {
+        refreshAssignments().catch(() => {});
+        refreshRecentEpcs().catch(() => {});
+        refreshInventory().catch(() => {});
+        return;
+      }
+      if (scope === "inventory") {
+        refreshInventory().catch(() => {});
+        refreshStocktake().catch(() => {});
+        return;
+      }
+      if (scope === "laundry") {
+        refreshLaundry().catch(() => {});
+        return;
+      }
       refreshInZone().catch(() => {});
-      refreshInventory().catch(() => {});
-      refreshStocktake().catch(() => {});
-      refreshLaundry().catch(() => {});
-      refreshAssignments().catch(() => {});
       refreshRecentEpcs().catch(() => {});
     }, 25);
   }
@@ -763,7 +803,9 @@
       try {
         const data = JSON.parse(evt.data);
         const type = data.type || "event";
-        pushLog(type);
+        if (!["live.raw", "live.touch"].includes(type)) {
+          pushLog(type);
+        }
         if (type === "demo.simulator.started") setSimulatorBadge(true);
         if (type === "demo.simulator.stopped") setSimulatorBadge(false);
         if (type === "bridge.connected") {
@@ -830,7 +872,16 @@
               item: data.item,
             });
           }
-          scheduleLiveRefresh();
+          const refreshScope = type.startsWith("pos.")
+            ? "pos"
+            : type.startsWith("assignment.")
+            ? "assignment"
+            : type.startsWith("inventory.")
+            ? "inventory"
+            : type.startsWith("laundry.")
+            ? "laundry"
+            : "live";
+          scheduleLiveRefresh(refreshScope);
         }
       } catch (_err) {
         pushLog("Invalid event payload");
@@ -970,7 +1021,7 @@
     refs.tabs.inventory.addEventListener("click", () => activateTab("inventory"));
     refs.tabs.laundry.addEventListener("click", () => activateTab("laundry"));
     refs.tabs.assign.addEventListener("click", () => activateTab("assign"));
-    refs.refreshBtn.addEventListener("click", () => refreshAll());
+    refs.refreshBtn.addEventListener("click", () => refreshActiveView());
     refs.laundryFilter.addEventListener("change", renderLaundry);
     refs.checkoutBtn.addEventListener("click", openCheckoutModal);
     refs.checkoutModalClose.addEventListener("click", closeCheckoutModal);
@@ -1053,7 +1104,7 @@
         }
         refs.manualEpc.value = "";
         pushLog(`Bin scan: ${epc}`);
-        Promise.all([refreshInZone(), refreshInventory(), refreshAssignments(), refreshRecentEpcs()]).catch(() => {});
+        refreshBilling().catch(() => {});
       } catch (err) {
         pushLog(`Bin scan failed: ${err.message}`);
       }
@@ -1130,7 +1181,7 @@
           renderInZone();
           renderCart();
           pushLog(`Added to bill: ${epc}`);
-          Promise.all([refreshInZone(), refreshInventory()]).catch(() => {});
+          Promise.all([refreshInZone(), refreshCart()]).catch(() => {});
         } catch (err) {
           pushLog(`Add to bill failed: ${err.message}`);
         }
@@ -1143,7 +1194,7 @@
         try {
           await apiPost("/api/live/remove", { epc });
           pushLog(`Removed from bin: ${epc}`);
-          await Promise.all([refreshInZone(), refreshInventory()]);
+          await refreshInZone();
         } catch (err) {
           pushLog(`Bin remove failed: ${err.message}`);
         }
@@ -1163,7 +1214,7 @@
         }
         renderCart();
         pushLog(`Removed from bill: ${epc}`);
-        Promise.all([refreshInZone(), refreshInventory()]).catch(() => {});
+        Promise.all([refreshInZone(), refreshCart()]).catch(() => {});
       } catch (err) {
         pushLog(`Cart remove failed: ${err.message}`);
       }
