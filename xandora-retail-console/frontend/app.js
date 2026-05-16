@@ -2,6 +2,7 @@
   const $ = (id) => document.getElementById(id);
   const SESSION_STORAGE_KEY = "xandora_retail_console_session";
   const REMEMBERED_EMAIL_KEY = "xandora_retail_console_email";
+  const LIVE_BIN_MAX_AGE_SEC = 10;
 
   const state = {
     activeView: "billing",
@@ -24,6 +25,7 @@
     events: null,
     liveRefreshTimer: null,
     catalogSyncTimer: null,
+    livePruneTimer: null,
   };
 
   const refs = {
@@ -126,6 +128,14 @@
 
   function formatAge(ageSec) {
     return `${Number(ageSec || 0).toFixed(1)}s ago`;
+  }
+
+  function getLiveAgeSec(item = {}) {
+    const lastSeenAt = Number(item.lastSeenAt || 0);
+    if (lastSeenAt > 0) {
+      return Math.max((Date.now() - lastSeenAt) / 1000, 0);
+    }
+    return Number(item.ageSec || 0);
   }
 
   function setApiOnline(isOnline) {
@@ -266,6 +276,7 @@
     applyProductVisibility();
     connectEvents();
     startSharedCatalogSync();
+    startLiveBinPrune();
     await refreshAll();
   }
 
@@ -310,28 +321,36 @@
   }
 
   function renderInZone() {
-    if (!state.inZone.length) {
+    const visibleItems = state.inZone.filter((item) => getLiveAgeSec(item) <= LIVE_BIN_MAX_AGE_SEC);
+    if (visibleItems.length !== state.inZone.length) {
+      state.inZone = visibleItems;
+    }
+
+    if (!visibleItems.length) {
       refs.inZoneBody.innerHTML = `<tr><td colspan="7" class="empty-row">No items in bin</td></tr>`;
       return;
     }
 
-    refs.inZoneBody.innerHTML = state.inZone
+    refs.inZoneBody.innerHTML = visibleItems
       .map(
-        (item) => `
+        (item) => {
+          const ageSec = getLiveAgeSec(item);
+          return `
       <tr>
         <td class="mono">${escapeHtml(item.epc)}</td>
         <td>${escapeHtml(item.name)}</td>
         <td>${escapeHtml(item.category)}</td>
         <td>${escapeHtml(item.bin || "-")}</td>
         <td>${formatMoney(item.price, item.currency)}</td>
-        <td>${formatAge(item.ageSec)}</td>
+        <td>${formatAge(ageSec)}</td>
         <td>
           <div class="row-actions">
             <button class="btn btn-small action-add" data-epc="${escapeHtml(item.epc)}" type="button">Add to Bill</button>
             <button class="btn btn-small btn-outline action-remove-live" data-epc="${escapeHtml(item.epc)}" type="button">Remove</button>
           </div>
         </td>
-      </tr>`
+      </tr>`;
+        }
       )
       .join("");
   }
@@ -454,6 +473,8 @@
       price: Number(item.price || item.price_lkr || 0),
       currency: item.currency || "LKR",
       ageSec: Number(item.ageSec || 0),
+      firstSeenAt: Number(item.firstSeenAt || Date.now()),
+      lastSeenAt: Number(item.lastSeenAt || Date.now()),
     };
   }
 
@@ -690,6 +711,17 @@
     state.catalogSyncTimer = setInterval(syncSharedCatalog, 5000);
   }
 
+  function startLiveBinPrune() {
+    if (state.livePruneTimer) {
+      clearInterval(state.livePruneTimer);
+    }
+    state.livePruneTimer = setInterval(() => {
+      if (state.activeView === "billing") {
+        renderInZone();
+      }
+    }, 1000);
+  }
+
   async function refreshAll() {
     try {
       await Promise.all([
@@ -906,6 +938,7 @@
       applyProductVisibility();
       connectEvents();
       startSharedCatalogSync();
+      startLiveBinPrune();
       await refreshAll();
     } catch (err) {
       showAuthModal(err.message || "Login failed");
@@ -1184,6 +1217,7 @@
     if (!restored) return;
     connectEvents();
     startSharedCatalogSync();
+    startLiveBinPrune();
     await refreshAll();
   }
 
