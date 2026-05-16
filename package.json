@@ -11,6 +11,7 @@
     "reader:pm2": "pm2 start ecosystem.readers.config.cjs",
     "reader:pm2:start": "powershell -ExecutionPolicy Bypass -File .\\scripts\\start-readers-pm2.ps1",
     "reader:pm2:startup": "powershell -ExecutionPolicy Bypass -File .\\scripts\\register-reader-pm2-startup.ps1",
+    "reader:pm2:startup-shortcut": "powershell -ExecutionPolicy Bypass -File .\\scripts\\register-reader-startup-shortcut.ps1",
     "migrate": "node scripts/run_migrations.js",
     "dashboard": "cd rfid-dashboard && npm run dev -- --host",
     "onprem:install": "powershell -ExecutionPolicy Bypass -File .\\scripts\\install-onprem.ps1",
