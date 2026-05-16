@@ -68,6 +68,7 @@ function createRetailState() {
     cartStore: new CartStore(),
     stocktakeStore: new StocktakeStore(),
     recentLiveEpcs: new Map(),
+    savedAssignments: new Map(),
     sseClients: new Set(),
   };
 
@@ -274,6 +275,30 @@ async function fetchCatalog(session, limit = 1000) {
     `/api/v1/catalog?store_id=${encodeURIComponent(session.selectedStoreId)}&limit=${limit}`
   );
   return Array.isArray(body?.items) ? body.items.map(toAssignmentItem) : [];
+}
+
+async function fetchAssignments(session, limit = 1000) {
+  const catalogItems = await fetchCatalog(session, limit);
+  const byEpc = new Map();
+
+  for (const item of catalogItems) {
+    const epc = normalizeEpc(item?.epc);
+    if (epc) byEpc.set(epc, { ...item, epc });
+  }
+
+  for (const item of session.state.savedAssignments.values()) {
+    const epc = normalizeEpc(item?.epc);
+    if (!epc) continue;
+    byEpc.set(epc, {
+      ...(byEpc.get(epc) || {}),
+      ...item,
+      epc,
+    });
+  }
+
+  return Array.from(byEpc.values()).sort((a, b) =>
+    String(b.epc).localeCompare(String(a.epc))
+  );
 }
 
 async function lookupCatalogItem(session, epc) {
@@ -886,9 +911,9 @@ app.post("/api/laundry/clear", requireSession, (_req, res) =>
 
 app.get("/api/assignments", requireSession, requireSelectedStore, async (req, res) => {
   try {
-    const items = await fetchCatalog(req.retailSession, 1000);
+    const items = await fetchAssignments(req.retailSession, 1000);
     return res.json({
-      items: items.sort((a, b) => String(b.epc).localeCompare(String(a.epc))),
+      items,
       count: items.length,
       include_seed_demo_items: false,
     });
@@ -899,7 +924,7 @@ app.get("/api/assignments", requireSession, requireSelectedStore, async (req, re
 
 app.get("/api/assignments/recent-epcs", requireSession, requireSelectedStore, async (req, res) => {
   try {
-    const assignments = await fetchCatalog(req.retailSession, 1000);
+    const assignments = await fetchAssignments(req.retailSession, 1000);
     const assignmentByEpc = new Map(assignments.map((item) => [item.epc, item]));
     const items = [];
     const state = req.retailSession.state;
@@ -959,6 +984,9 @@ app.post("/api/assignments", requireSession, requireSelectedStore, async (req, r
     });
 
     const item = toAssignmentItem(body?.item || {});
+    if (item.epc) {
+      req.retailSession.state.savedAssignments.set(normalizeEpc(item.epc), item);
+    }
     rememberRecentEpc(req.retailSession.state, item.epc, {
       source: "Assignment saved",
       assigned: true,
