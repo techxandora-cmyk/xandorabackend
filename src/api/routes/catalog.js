@@ -609,7 +609,22 @@ module.exports = function buildCatalogRoutes(pool) {
       });
 
       await client.query("COMMIT");
-      return res.json({ ok: true, item });
+
+      const persistedRows = await loadCatalogRowsByEpcs(store_id, [epc]);
+      const persistedItem = persistedRows[0] || null;
+      if (!persistedItem) {
+        console.error("[catalog/upsert-item] item missing after commit", {
+          store_id,
+          epc,
+          actor_email: req.user?.email || null,
+        });
+        return res.status(500).json({
+          ok: false,
+          error: "Catalog item did not persist after save",
+        });
+      }
+
+      return res.json({ ok: true, item: persistedItem });
     } catch (err) {
       await client.query("ROLLBACK");
       console.error("[catalog/upsert-item]", err);
