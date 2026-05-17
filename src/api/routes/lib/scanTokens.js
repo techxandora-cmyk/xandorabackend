@@ -39,11 +39,19 @@ async function lookupScanToken(pool, rawToken) {
 }
 
 async function generateStoreToken(client, { companyName, storeId, label }) {
+  const existing = await client.query(
+    `SELECT token FROM scan_tokens
+     WHERE token_type = 'store' AND company_name = $1 AND store_id = $2 AND is_active = TRUE
+     LIMIT 1`,
+    [companyName, storeId]
+  );
+  if (existing.rows[0]?.token) return existing.rows[0].token;
+
   const token = generateToken("st");
   await client.query(
     `INSERT INTO scan_tokens (token, token_type, company_name, store_id, label)
      VALUES ($1, 'store', $2, $3, $4)
-     ON CONFLICT ON CONSTRAINT idx_scan_tokens_unique_active_store DO NOTHING`,
+     ON CONFLICT DO NOTHING`,
     [token, companyName, storeId, label || storeId]
   );
   // Return the token that is now active for this store (may be pre-existing)
@@ -57,11 +65,19 @@ async function generateStoreToken(client, { companyName, storeId, label }) {
 }
 
 async function generateCompanyToken(client, { companyName }) {
+  const existing = await client.query(
+    `SELECT token FROM scan_tokens
+     WHERE token_type = 'company' AND company_name = $1 AND is_active = TRUE
+     LIMIT 1`,
+    [companyName]
+  );
+  if (existing.rows[0]?.token) return existing.rows[0].token;
+
   const token = generateToken("ct");
   await client.query(
     `INSERT INTO scan_tokens (token, token_type, company_name, store_id, label)
      VALUES ($1, 'company', $2, NULL, $2)
-     ON CONFLICT ON CONSTRAINT idx_scan_tokens_unique_active_company DO NOTHING`,
+     ON CONFLICT DO NOTHING`,
     [token, companyName]
   );
   const r = await client.query(
