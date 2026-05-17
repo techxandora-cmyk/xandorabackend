@@ -143,6 +143,17 @@ function rememberSharedAssignment(storeId, item) {
   return next;
 }
 
+function getCachedAssignment(session, epc) {
+  const normalized = normalizeEpc(epc);
+  if (!session || !normalized) return null;
+  return (
+    session.state.savedAssignments.get(normalized) ||
+    getSharedAssignments(session.selectedStoreId).get(normalized) ||
+    assignmentStore.get(session.selectedStoreId, normalized) ||
+    null
+  );
+}
+
 function broadcastToStoreSessions(storeId, event) {
   const normalizedStoreId = normalizeStoreId(storeId);
   for (const session of sessions.values()) {
@@ -551,16 +562,19 @@ function startLiveBridge() {
               const epc = normalizeEpc(data.tag || data.epc || "");
               if (!epc) continue;
 
+              const cachedItem = getCachedAssignment(session, epc);
               rememberRecentEpc(session.state, epc, {
                 source: eventName === "scan" ? "Live reader" : "Zone heartbeat",
-                assigned: false,
-                item: null,
+                assigned: Boolean(cachedItem),
+                item: cachedItem,
               });
 
               broadcastToState(session.state, {
                 type: "live.raw",
                 epc,
                 source: eventName === "scan" ? "Live reader" : "Zone heartbeat",
+                assigned: Boolean(cachedItem),
+                item: cachedItem ? toZoneItem(cachedItem) : null,
                 at: Date.now(),
               });
 
@@ -1101,8 +1115,8 @@ app.get("/api/assignments/recent-epcs", requireSession, requireSelectedStore, as
         source: row.source || "Live reader",
         seenAt: row.seenAt,
         seenAtIso: new Date(row.seenAt).toISOString(),
-        assigned: assignmentByEpc.has(row.epc),
         item: assignmentByEpc.get(row.epc) || row.item || null,
+        assigned: assignmentByEpc.has(row.epc) || Boolean(row.assigned || row.item),
       });
     }
 

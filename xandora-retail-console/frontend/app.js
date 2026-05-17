@@ -829,6 +829,8 @@
               source: data.source || "Live reader",
               seenAt: data.at || Date.now(),
               seenAtIso: new Date(data.at || Date.now()).toISOString(),
+              assigned: Boolean(data.assigned || data.item),
+              item: data.item || null,
             });
           }
           if ((type === "live.scan" || type === "live.enter" || type === "live.touch") && data.item) {
