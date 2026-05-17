@@ -62,11 +62,21 @@ module.exports = function buildBridgeRoutes(pool) {
     if (!reader_ip) return res.status(400).json({ ok: false, error: "reader_ip required" });
 
     try {
+      const values = [tokenRow.store_id, tokenRow.company_name, reader_ip];
+      let deviceClause = "";
+      if (device_id) {
+        values.push(String(device_id).trim());
+        deviceClause = ` AND device_id = $${values.length}`;
+      }
+
       await pool.query(
         `UPDATE registered_readers
          SET last_seen_at = NOW(), updated_at = NOW()
-         WHERE store_id = $1 AND reader_ip = $2`,
-        [tokenRow.store_id, reader_ip]
+         WHERE store_id = $1
+           AND company_name = $2
+           AND reader_ip = $3
+           ${deviceClause}`,
+        values
       );
       return res.json({ ok: true });
     } catch (e) {

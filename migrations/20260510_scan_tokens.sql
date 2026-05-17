@@ -67,6 +67,28 @@ CREATE INDEX IF NOT EXISTS idx_registered_readers_active ON registered_readers(i
 -- Backfill store tokens for existing company_stores
 -- ============================================================
 
+CREATE SEQUENCE IF NOT EXISTS company_stores_id_seq;
+
+CREATE TABLE IF NOT EXISTS company_stores (
+  id BIGINT PRIMARY KEY DEFAULT nextval('company_stores_id_seq'::regclass),
+  company_name TEXT NOT NULL,
+  store_id VARCHAR(64) NOT NULL,
+  store_name TEXT NOT NULL,
+  is_active BOOLEAN NOT NULL DEFAULT TRUE,
+  created_by_user_id BIGINT REFERENCES users(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (company_name, store_id)
+);
+
+ALTER SEQUENCE company_stores_id_seq OWNED BY company_stores.id;
+
+CREATE INDEX IF NOT EXISTS idx_company_stores_company_name
+  ON company_stores (company_name);
+
+CREATE INDEX IF NOT EXISTS idx_company_stores_is_active
+  ON company_stores (is_active);
+
 INSERT INTO scan_tokens (token, token_type, company_name, store_id, label)
 SELECT
   'st_' || replace(gen_random_uuid()::text, '-', ''),

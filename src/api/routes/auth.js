@@ -122,6 +122,17 @@ async function tableExists(pool, tableName) {
   return Boolean(r.rows[0]?.regclass_name);
 }
 
+async function ensureUsersAuthColumns(pool) {
+  try {
+    await pool.query(`
+      ALTER TABLE users
+      ADD COLUMN IF NOT EXISTS force_password_change BOOLEAN NOT NULL DEFAULT FALSE
+    `);
+  } catch (e) {
+    console.warn("[auth/login] users auth column compatibility check failed:", e.message);
+  }
+}
+
 async function ensureCustomerPaymentAlertsBlockingColumns(pool) {
   const exists = await tableExists(pool, "customer_payment_alerts");
   if (!exists) return false;
@@ -356,6 +367,8 @@ module.exports = function buildAuthRoutes(pool) {
           error: "Select the Xandora software you want to open.",
         });
       }
+
+      await ensureUsersAuthColumns(pool);
 
       const userResult = await pool.query(
         `

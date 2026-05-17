@@ -82,7 +82,66 @@ module.exports = function buildEventsRoutes(pool) {
 
       const body = req.body || {};
       const eventType = String(body.event_type || body.event || "rfid_decision");
-      const data = body.data && typeof body.data === "object" ? body.data : body;
+      const incomingData = body.data && typeof body.data === "object" ? body.data : body;
+      const data = { ...incomingData };
+
+      if (tokenRow?.is_active) {
+        const tokenType = String(tokenRow.token_type || "").trim().toLowerCase();
+        const tokenCompany = String(tokenRow.company_name || "").trim();
+        const tokenStore = String(tokenRow.store_id || "").trim();
+        const deviceId = String(data.device_id || "").trim();
+
+        if (tokenType === "store") {
+          data.company_name = tokenCompany;
+          data.store_id = tokenStore;
+        } else if (tokenType === "company") {
+          const requestedStore = String(data.store_id || "").trim();
+          if (!requestedStore) {
+            return res.status(400).json({
+              ok: false,
+              error: "store_id required for company token",
+            });
+          }
+
+          const storeResult = await pool.query(
+            `SELECT 1
+             FROM company_stores
+             WHERE company_name = $1
+               AND store_id = $2
+               AND is_active = TRUE
+             LIMIT 1`,
+            [tokenCompany, requestedStore]
+          );
+          if (storeResult.rowCount === 0) {
+            return res.status(403).json({
+              ok: false,
+              error: "Store is not active for this company token",
+            });
+          }
+
+          data.company_name = tokenCompany;
+          data.store_id = requestedStore;
+        }
+
+        if (deviceId) {
+          const readerResult = await pool.query(
+            `SELECT 1
+             FROM registered_readers
+             WHERE company_name = $1
+               AND store_id = $2
+               AND device_id = $3
+               AND is_active = TRUE
+             LIMIT 1`,
+            [tokenCompany, String(data.store_id || "").trim(), deviceId]
+          );
+          if (readerResult.rowCount === 0) {
+            return res.status(403).json({
+              ok: false,
+              error: "Reader is not registered for this store",
+            });
+          }
+        }
+      }
 
       pushEvent(eventType, data);
 

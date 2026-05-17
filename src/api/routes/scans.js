@@ -358,6 +358,82 @@ module.exports = function buildScanRoutes(pool) {
     return v || null;
   }
 
+  async function resolveScanWriterScope(poolOrClient, req, payload = {}) {
+    const token = req.scanToken || null;
+    const requestedStoreId = normalizeStoreId(payload.store_id);
+    const deviceId = String(payload.device_id || "").trim();
+
+    if (!token) {
+      return {
+        ok: true,
+        store_id: requestedStoreId,
+        company_name: null,
+        auth_mode: req.user ? "jwt" : "legacy_scan_key",
+      };
+    }
+
+    const tokenType = String(token.token_type || "").trim().toLowerCase();
+    const companyName = String(token.company_name || "").trim();
+    let storeId = requestedStoreId;
+
+    if (tokenType === "store") {
+      storeId = normalizeStoreId(token.store_id);
+      if (!storeId) {
+        return { ok: false, status: 403, error: "Store token is missing store scope" };
+      }
+    } else if (tokenType === "company") {
+      if (!storeId) {
+        return { ok: false, status: 400, error: "store_id required for company token" };
+      }
+
+      const storeResult = await poolOrClient.query(
+        `SELECT 1
+         FROM company_stores
+         WHERE company_name = $1
+           AND store_id = $2
+           AND is_active = TRUE
+         LIMIT 1`,
+        [companyName, storeId]
+      );
+      if (storeResult.rowCount === 0) {
+        return { ok: false, status: 403, error: "Store is not active for this company token" };
+      }
+    } else {
+      return { ok: false, status: 403, error: "Unsupported scan token type" };
+    }
+
+    if (!deviceId) {
+      return { ok: false, status: 400, error: "device_id required" };
+    }
+
+    const readerResult = await poolOrClient.query(
+      `SELECT id, reader_ip, reader_name, zone_id
+       FROM registered_readers
+       WHERE company_name = $1
+         AND store_id = $2
+         AND device_id = $3
+         AND is_active = TRUE
+       LIMIT 1`,
+      [companyName, storeId, deviceId]
+    );
+
+    if (readerResult.rowCount === 0) {
+      return {
+        ok: false,
+        status: 403,
+        error: "Reader is not registered for this store",
+      };
+    }
+
+    return {
+      ok: true,
+      store_id: storeId,
+      company_name: companyName,
+      reader: readerResult.rows[0],
+      auth_mode: `${tokenType}_token`,
+    };
+  }
+
   function normalizeIncomingTag(value) {
     const v = String(value || "").trim();
     return v || null;
@@ -2148,7 +2224,7 @@ module.exports = function buildScanRoutes(pool) {
           catalogAvailable = false;
         }
 
-        const { device_id, store_id, items = [] } = req.body;
+        const { device_id, items = [] } = req.body;
 
         if (!device_id || !Array.isArray(items) || items.length === 0) {
           return res.status(400).json({
@@ -2156,6 +2232,16 @@ module.exports = function buildScanRoutes(pool) {
             error: "Invalid body",
           });
         }
+
+        const writerScope = await resolveScanWriterScope(pool, req, req.body);
+        if (!writerScope.ok) {
+          return res.status(writerScope.status || 403).json({
+            ok: false,
+            error: writerScope.error || "Forbidden",
+          });
+        }
+
+        const store_id = writerScope.store_id;
 
         const aggregatedBatch = aggregateScanItems(items);
         const incomingTags = Array.from(aggregatedBatch.itemsByTag.keys());
@@ -2275,6 +2361,15 @@ module.exports = function buildScanRoutes(pool) {
             `,
             [device_id, device_id, store_id]
           );
+
+          if (writerScope.reader?.id) {
+            await client.query(
+              `UPDATE registered_readers
+               SET last_seen_at = NOW(), updated_at = NOW()
+               WHERE id = $1`,
+              [writerScope.reader.id]
+            );
+          }
 
           const insertedTags = [];
           const decisions = [];
