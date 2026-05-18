@@ -1,5 +1,16 @@
-﻿// src/components/AlertsPanel.jsx
+// src/components/AlertsPanel.jsx
 import React, { useEffect, useMemo, useState } from "react";
+import {
+  AlertTriangle,
+  Bell,
+  CheckCircle2,
+  ClipboardList,
+  MessageSquare,
+  Pause,
+  Play,
+  RefreshCw,
+  UserPlus,
+} from "lucide-react";
 import { apiGet, apiPost, apiPut } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 
@@ -16,13 +27,33 @@ function formatAgo(ms) {
   return `${d}d ago`;
 }
 
-function toToneBySeverity(severity) {
+function formatDateTime(value) {
+  if (!value) return "-";
+  try {
+    return new Date(value).toLocaleString();
+  } catch {
+    return "-";
+  }
+}
+
+function cleanLabel(value, fallback = "Alert") {
+  const raw = String(value || fallback).trim();
+  return raw
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .toLowerCase()
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function severityInfo(severity) {
   const n = Number(severity);
-  if (!Number.isFinite(n)) return "neutral";
-  if (n >= 80) return "red";
-  if (n >= 60) return "yellow";
-  if (n >= 30) return "blue";
-  return "neutral";
+  if (!Number.isFinite(n)) {
+    return { label: "Info", tone: "neutral", rank: 0 };
+  }
+  if (n >= 80) return { label: "Critical", tone: "red", rank: 4 };
+  if (n >= 60) return { label: "High", tone: "yellow", rank: 3 };
+  if (n >= 30) return { label: "Medium", tone: "blue", rank: 2 };
+  return { label: "Low", tone: "green", rank: 1 };
 }
 
 function toneByCasePriority(priority) {
@@ -40,22 +71,86 @@ function toneByCaseStatus(status) {
   return "neutral";
 }
 
-function Badge({ children, tone = "neutral" }) {
-  const cls =
-    tone === "green"
-      ? "bg-emerald-500/15 text-emerald-300 border-emerald-500/20"
-      : tone === "yellow"
-      ? "bg-amber-500/15 text-amber-300 border-amber-500/20"
-      : tone === "red"
-      ? "bg-rose-500/15 text-rose-300 border-rose-500/20"
-      : tone === "blue"
-      ? "bg-cyan-500/15 text-cyan-300 border-cyan-500/20"
-      : "bg-white/5 text-white/70 border-white/10";
+function toneClasses(tone = "neutral") {
+  if (tone === "green") {
+    return "border-emerald-500/25 bg-emerald-500/10 text-emerald-300 dark:text-emerald-300";
+  }
+  if (tone === "yellow") {
+    return "border-amber-500/30 bg-amber-500/10 text-amber-300 dark:text-amber-300";
+  }
+  if (tone === "red") {
+    return "border-rose-500/30 bg-rose-500/10 text-rose-300 dark:text-rose-300";
+  }
+  if (tone === "blue") {
+    return "border-cyan-500/30 bg-cyan-500/10 text-cyan-300 dark:text-cyan-300";
+  }
+  return "border-white/10 bg-white/5 text-black/65 dark:text-white/70";
+}
 
+function Badge({ children, tone = "neutral" }) {
   return (
-    <span className={`text-[10px] px-2 py-0.5 rounded border ${cls}`}>
+    <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] ${toneClasses(tone)}`}>
       {children}
     </span>
+  );
+}
+
+function SegmentButton({ active, children, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={[
+        "rounded border px-3 py-1.5 text-xs transition",
+        active
+          ? "border-cyan-500/45 bg-cyan-500/12 text-cyan-200"
+          : "border-white/10 text-black/65 hover:bg-white/8 dark:text-white/70",
+      ].join(" ")}
+    >
+      {children}
+    </button>
+  );
+}
+
+function IconButton({ children, icon: Icon, tone = "neutral", ...props }) {
+  return (
+    <button
+      type="button"
+      {...props}
+      className={[
+        "inline-flex items-center gap-1.5 rounded border px-3 py-1.5 text-xs transition disabled:cursor-not-allowed disabled:opacity-50",
+        tone === "green"
+          ? "border-emerald-500/35 text-emerald-300 hover:bg-emerald-500/10"
+          : tone === "blue"
+          ? "border-cyan-500/35 text-cyan-300 hover:bg-cyan-500/10"
+          : "border-white/12 text-black/70 hover:bg-white/8 dark:text-white/75",
+      ].join(" ")}
+    >
+      {Icon ? <Icon size={13} strokeWidth={2} /> : null}
+      {children}
+    </button>
+  );
+}
+
+function MetricCard({ title, value, hint, tone = "neutral", icon: Icon }) {
+  return (
+    <div className="rounded-lg border border-white/10 bg-white/[0.04] px-4 py-3">
+      <div className="flex items-center justify-between gap-3">
+        <div className="text-[11px] text-black/55 dark:text-white/50">{title}</div>
+        {Icon ? <Icon className={toneClasses(tone).split(" ").find((c) => c.startsWith("text-")) || ""} size={15} /> : null}
+      </div>
+      <div className="mt-1 text-2xl font-semibold text-black/85 dark:text-white/90">{value}</div>
+      <div className="mt-1 text-[11px] text-black/45 dark:text-white/40">{hint}</div>
+    </div>
+  );
+}
+
+function EmptyState({ title, detail }) {
+  return (
+    <div className="rounded-lg border border-dashed border-white/15 bg-white/[0.03] px-4 py-8 text-center">
+      <div className="text-sm font-medium text-black/70 dark:text-white/75">{title}</div>
+      <div className="mt-1 text-xs text-black/45 dark:text-white/45">{detail}</div>
+    </div>
   );
 }
 
@@ -78,10 +173,10 @@ export default function AlertsPanel() {
   const [lastUpdatedAt, setLastUpdatedAt] = useState(null);
   const [nowTick, setNowTick] = useState(Date.now());
 
-  const [viewMode, setViewMode] = useState("ALERTS"); // ALERTS | CASES
-  const [alertTab, setAlertTab] = useState("OPERATIONAL"); // OPERATIONAL | SYSTEM
+  const [viewMode, setViewMode] = useState("ALERTS");
+  const [alertTab, setAlertTab] = useState("OPERATIONAL");
   const [showResolvedAlerts, setShowResolvedAlerts] = useState(false);
-  const [caseFilter, setCaseFilter] = useState("ACTIVE"); // ACTIVE | ALL | RESOLVED
+  const [caseFilter, setCaseFilter] = useState("ACTIVE");
 
   async function load(activeStoreId) {
     const sid = activeStoreId || store_id;
@@ -96,11 +191,8 @@ export default function AlertsPanel() {
         const casesRes = await apiGet(`/alerts/cases?store_id=${encodeURIComponent(sid)}&limit=300`);
         setCases(Array.isArray(casesRes?.cases) ? casesRes.cases : []);
       } catch (e) {
-        if (Number(e?.status) === 404) {
-          setCases([]);
-        } else {
-          throw e;
-        }
+        if (Number(e?.status) === 404) setCases([]);
+        else throw e;
       }
 
       setLastUpdatedAt(Date.now());
@@ -224,11 +316,9 @@ export default function AlertsPanel() {
   }, []);
 
   useEffect(() => {
-    if (!autoRefresh) return;
+    if (!autoRefresh) return undefined;
     const id = setInterval(() => {
-      if (document.visibilityState === "visible") {
-        load(store_id);
-      }
+      if (document.visibilityState === "visible") load(store_id);
     }, 10000);
     return () => clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -242,7 +332,7 @@ export default function AlertsPanel() {
   const updatedAgo = formatAgo(nowTick - (lastUpdatedAt || 0));
 
   const filteredAlerts = useMemo(() => {
-    let rows = Array.isArray(alerts) ? alerts : [];
+    let rows = Array.isArray(alerts) ? [...alerts] : [];
 
     rows = rows.filter((a) => {
       const t = String(a.type || "").toUpperCase();
@@ -258,6 +348,8 @@ export default function AlertsPanel() {
       const aStatus = String(a.status || "").toUpperCase();
       const bStatus = String(b.status || "").toUpperCase();
       if (aStatus !== bStatus) return aStatus === "OPEN" ? -1 : 1;
+      const severityDelta = severityInfo(b.severity).rank - severityInfo(a.severity).rank;
+      if (severityDelta) return severityDelta;
       return new Date(b.last_detected_at || 0) - new Date(a.last_detected_at || 0);
     });
 
@@ -288,6 +380,15 @@ export default function AlertsPanel() {
     () => alerts.filter((a) => String(a.status || "").toUpperCase() === "OPEN").length,
     [alerts]
   );
+  const urgentAlertCount = useMemo(
+    () =>
+      alerts.filter(
+        (a) =>
+          String(a.status || "").toUpperCase() === "OPEN" &&
+          severityInfo(a.severity).rank >= 3
+      ).length,
+    [alerts]
+  );
   const activeCaseCount = useMemo(
     () =>
       cases.filter((c) => {
@@ -298,282 +399,308 @@ export default function AlertsPanel() {
   );
 
   return (
-    <div className="glass rounded-xl p-5 border">
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-3 flex-wrap">
-          <div className="text-[11px]">Alerts + Cases</div>
-          <Badge>Store: {store_id}</Badge>
-          <Badge tone="red">Open Alerts: {openAlertCount}</Badge>
-          <Badge tone="yellow">Active Cases: {activeCaseCount}</Badge>
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <MetricCard title="Open Alerts" value={openAlertCount} hint={`Store ${store_id}`} tone="red" icon={Bell} />
+        <MetricCard title="High Priority" value={urgentAlertCount} hint="Critical or high severity" tone="yellow" icon={AlertTriangle} />
+        <MetricCard title="Active Cases" value={activeCaseCount} hint="Open or in progress" tone="blue" icon={ClipboardList} />
+        <MetricCard title="Refresh" value={lastUpdatedAt ? updatedAgo : "-"} hint={autoRefresh ? "Live polling on" : "Live polling paused"} tone={autoRefresh ? "green" : "neutral"} icon={autoRefresh ? Play : Pause} />
+      </div>
+
+      <div className="glass rounded-xl border p-5">
+        <div className="flex flex-wrap items-start justify-between gap-3 border-b border-white/10 pb-4">
+          <div>
+            <div className="text-sm font-semibold text-black/85 dark:text-white/90">
+              Alert Center
+            </div>
+            <div className="mt-1 text-xs text-black/50 dark:text-white/50">
+              Review live operational issues, assign follow-up, and close resolved events.
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <IconButton icon={autoRefresh ? Pause : Play} onClick={() => setAutoRefresh((v) => !v)}>
+              {autoRefresh ? "Pause" : "Resume"}
+            </IconButton>
+            <IconButton icon={RefreshCw} onClick={() => load(store_id)} disabled={loading}>
+              {loading ? "Loading" : "Refresh"}
+            </IconButton>
+          </div>
         </div>
 
-        <button onClick={() => load(store_id)} className="px-3 py-1 rounded border text-xs">
-          {loading ? "Loading..." : "Refresh"}
-        </button>
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          <SegmentButton active={viewMode === "ALERTS"} onClick={() => setViewMode("ALERTS")}>
+            Alerts
+          </SegmentButton>
+          <SegmentButton active={viewMode === "CASES"} onClick={() => setViewMode("CASES")}>
+            Cases
+          </SegmentButton>
+          <div className="ml-auto flex items-center gap-2 text-[11px] text-black/45 dark:text-white/45">
+            <span className={`h-2 w-2 rounded-full ${autoRefresh ? "bg-emerald-400" : "bg-zinc-400"}`} />
+            <span>{lastUpdatedAt ? `Updated ${updatedAgo}` : "Not loaded yet"}</span>
+          </div>
+        </div>
+
+        {err ? (
+          <div className="mt-4 rounded-lg border border-rose-500/25 bg-rose-500/10 px-4 py-3 text-sm text-rose-300">
+            {err}
+          </div>
+        ) : null}
+
+        {viewMode === "ALERTS" ? (
+          <div className="mt-4 space-y-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <SegmentButton active={alertTab === "OPERATIONAL"} onClick={() => setAlertTab("OPERATIONAL")}>
+                Operational
+              </SegmentButton>
+              <SegmentButton active={alertTab === "SYSTEM"} onClick={() => setAlertTab("SYSTEM")}>
+                System
+              </SegmentButton>
+              <SegmentButton active={showResolvedAlerts} onClick={() => setShowResolvedAlerts((v) => !v)}>
+                {showResolvedAlerts ? "All Alerts" : "Open Only"}
+              </SegmentButton>
+            </div>
+
+            {loading && filteredAlerts.length === 0 ? (
+              <EmptyState title="Loading alerts" detail="Checking the latest store signals." />
+            ) : filteredAlerts.length === 0 ? (
+              <EmptyState title="No alerts to review" detail="This store has no matching alerts right now." />
+            ) : (
+              <div className="space-y-3">
+                {filteredAlerts.map((alert) => (
+                  <AlertCard
+                    key={alert.id}
+                    alert={alert}
+                    actingId={actingId}
+                    isAdmin={isAdmin}
+                    onResolve={resolveAlert}
+                    onCreateCase={createCaseFromAlert}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="mt-4 space-y-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <SegmentButton active={caseFilter === "ACTIVE"} onClick={() => setCaseFilter("ACTIVE")}>
+                Active
+              </SegmentButton>
+              <SegmentButton active={caseFilter === "RESOLVED"} onClick={() => setCaseFilter("RESOLVED")}>
+                Resolved
+              </SegmentButton>
+              <SegmentButton active={caseFilter === "ALL"} onClick={() => setCaseFilter("ALL")}>
+                All
+              </SegmentButton>
+            </div>
+
+            {loading && filteredCases.length === 0 ? (
+              <EmptyState title="Loading cases" detail="Checking follow-up work for this store." />
+            ) : filteredCases.length === 0 ? (
+              <EmptyState title="No cases found" detail="There are no cases in this filter." />
+            ) : (
+              <div className="space-y-3">
+                {filteredCases.map((caseRow) => (
+                  <CaseCard
+                    key={caseRow.id}
+                    caseRow={caseRow}
+                    actingId={actingId}
+                    isAdmin={isAdmin}
+                    noteDraft={noteDraftByCase[Number(caseRow.id || 0)] || ""}
+                    onNoteChange={(value) =>
+                      setNoteDraftByCase((prev) => ({
+                        ...prev,
+                        [Number(caseRow.id || 0)]: value,
+                      }))
+                    }
+                    onAssign={assignCaseToMe}
+                    onStatus={updateCaseStatus}
+                    onAddNote={addCaseNote}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function AlertCard({ alert, actingId, isAdmin, onResolve, onCreateCase }) {
+  const status = String(alert.status || "").toUpperCase();
+  const severity = severityInfo(alert.severity);
+  const hasOpenCase = Number(alert.open_case_count || 0) > 0;
+  const canResolve = status === "OPEN" && isAdmin;
+  const alertActionId = `alert-resolve-${alert.id}`;
+  const caseActionId = `alert-case-${alert.id}`;
+  const entityText = [alert.entity_type, alert.entity_id].filter(Boolean).join(":") || "Store signal";
+
+  return (
+    <div className="overflow-hidden rounded-lg border border-white/10 bg-white/[0.035]">
+      <div className={`h-1 ${severity.tone === "red" ? "bg-rose-400" : severity.tone === "yellow" ? "bg-amber-400" : severity.tone === "blue" ? "bg-cyan-400" : "bg-white/20"}`} />
+      <div className="p-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="text-sm font-semibold text-black/85 dark:text-white/90">
+                {cleanLabel(alert.type, "Alert")}
+              </div>
+              <Badge tone={severity.tone}>{severity.label}</Badge>
+              <Badge tone={status === "RESOLVED" ? "green" : "neutral"}>{cleanLabel(status, "Open")}</Badge>
+              {hasOpenCase ? <Badge tone="blue">{alert.latest_case_ref || "Case open"}</Badge> : null}
+            </div>
+            <div className="mt-2 text-xs text-black/55 dark:text-white/50">
+              {entityText} · Store {alert.store_id || "GLOBAL"}
+            </div>
+          </div>
+
+          <div className="text-right text-xs text-black/45 dark:text-white/45">
+            <div>Last detected</div>
+            <div className="mt-0.5 text-black/65 dark:text-white/65">
+              {formatDateTime(alert.last_detected_at)}
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-4 flex flex-wrap gap-2">
+          {canResolve ? (
+            <IconButton
+              icon={CheckCircle2}
+              tone="green"
+              onClick={() => onResolve(alert.id)}
+              disabled={actingId === alertActionId}
+            >
+              {actingId === alertActionId ? "Resolving" : "Resolve"}
+            </IconButton>
+          ) : null}
+
+          {isAdmin ? (
+            <IconButton
+              icon={ClipboardList}
+              tone="blue"
+              onClick={() => onCreateCase(alert)}
+              disabled={actingId === caseActionId}
+            >
+              {actingId === caseActionId ? "Opening" : hasOpenCase ? "Open Case" : "Create Case"}
+            </IconButton>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CaseCard({
+  caseRow,
+  actingId,
+  isAdmin,
+  noteDraft,
+  onNoteChange,
+  onAssign,
+  onStatus,
+  onAddNote,
+}) {
+  const cid = Number(caseRow.id || 0);
+  const status = String(caseRow.status || "").toUpperCase();
+  const actionIdStatus = `case-status-${cid}`;
+  const actionIdAssign = `case-assign-${cid}`;
+  const actionIdNote = `case-note-${cid}`;
+  const assigned = caseRow.assigned_to_name || caseRow.assigned_to_email || "Unassigned";
+
+  return (
+    <div className="rounded-lg border border-white/10 bg-white/[0.035] p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="text-sm font-semibold text-black/85 dark:text-white/90">
+              {caseRow.case_ref || `Case #${cid}`}
+            </div>
+            <Badge tone={toneByCasePriority(caseRow.priority)}>
+              {cleanLabel(caseRow.priority || "Medium")}
+            </Badge>
+            <Badge tone={toneByCaseStatus(status)}>{cleanLabel(status || "Open")}</Badge>
+          </div>
+          <div className="mt-2 text-sm text-black/75 dark:text-white/80">
+            {caseRow.title || "Untitled case"}
+          </div>
+          <div className="mt-1 text-xs text-black/50 dark:text-white/50">
+            Store {caseRow.store_id || "-"} · Assigned to {assigned}
+            {caseRow.alert_id ? ` · Alert #${caseRow.alert_id}` : ""}
+          </div>
+        </div>
+
+        <div className="text-right text-xs text-black/45 dark:text-white/45">
+          <div>Updated</div>
+          <div className="mt-0.5 text-black/65 dark:text-white/65">
+            {formatDateTime(caseRow.updated_at)}
+          </div>
+        </div>
       </div>
 
-      <div className="flex items-center gap-2 mb-3 text-[11px] opacity-70">
-        <span
-          className={`inline-block w-2 h-2 rounded-full ${
-            autoRefresh ? "bg-emerald-400 animate-pulse" : "bg-zinc-400"
-          }`}
+      {caseRow.description ? (
+        <div className="mt-3 rounded border border-white/10 bg-black/10 px-3 py-2 text-xs text-black/60 dark:text-white/60">
+          {caseRow.description}
+        </div>
+      ) : null}
+
+      <div className="mt-4 flex flex-wrap gap-2">
+        {isAdmin ? (
+          <IconButton
+            icon={UserPlus}
+            tone="blue"
+            onClick={() => onAssign(caseRow)}
+            disabled={actingId === actionIdAssign}
+          >
+            {actingId === actionIdAssign ? "Assigning" : "Assign to Me"}
+          </IconButton>
+        ) : null}
+
+        {isAdmin && status === "OPEN" ? (
+          <IconButton
+            onClick={() => onStatus(caseRow, "IN_PROGRESS")}
+            disabled={actingId === actionIdStatus}
+          >
+            {actingId === actionIdStatus ? "Updating" : "Start"}
+          </IconButton>
+        ) : null}
+
+        {isAdmin && (status === "OPEN" || status === "IN_PROGRESS") ? (
+          <IconButton
+            icon={CheckCircle2}
+            tone="green"
+            onClick={() => onStatus(caseRow, "RESOLVED")}
+            disabled={actingId === actionIdStatus}
+          >
+            {actingId === actionIdStatus ? "Updating" : "Resolve"}
+          </IconButton>
+        ) : null}
+
+        {isAdmin && status === "RESOLVED" ? (
+          <IconButton
+            onClick={() => onStatus(caseRow, "OPEN")}
+            disabled={actingId === actionIdStatus}
+          >
+            {actingId === actionIdStatus ? "Updating" : "Reopen"}
+          </IconButton>
+        ) : null}
+      </div>
+
+      <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+        <input
+          value={noteDraft}
+          onChange={(e) => onNoteChange(e.target.value)}
+          placeholder="Add a short follow-up note"
+          className="min-w-0 flex-1 rounded border border-white/10 bg-white/5 px-3 py-2 text-xs text-black/80 outline-none placeholder:text-black/35 focus:border-cyan-500/50 dark:text-white/80 dark:placeholder:text-white/35"
         />
-        <span>{autoRefresh ? "Live" : "Paused"}</span>
-        <span>-</span>
-        <span>Updated {lastUpdatedAt ? updatedAgo : "-"}</span>
-        <button onClick={() => setAutoRefresh((v) => !v)} className="ml-2 px-2 py-1 rounded border">
-          {autoRefresh ? "Pause" : "Resume"}
-        </button>
-      </div>
-
-      {err && <div className="mb-3 text-sm text-red-500">{err}</div>}
-
-      <div className="flex items-center gap-2 mb-3">
-        <button
-          onClick={() => setViewMode("ALERTS")}
-          className={`px-3 py-1 rounded border text-xs ${
-            viewMode === "ALERTS" ? "bg-white/10" : "hover:bg-white/5"
-          }`}
+        <IconButton
+          icon={MessageSquare}
+          onClick={() => onAddNote(caseRow)}
+          disabled={actingId === actionIdNote || !String(noteDraft || "").trim()}
         >
-          Alerts
-        </button>
-        <button
-          onClick={() => setViewMode("CASES")}
-          className={`px-3 py-1 rounded border text-xs ${
-            viewMode === "CASES" ? "bg-white/10" : "hover:bg-white/5"
-          }`}
-        >
-          Cases
-        </button>
+          {actingId === actionIdNote ? "Adding" : "Add Note"}
+        </IconButton>
       </div>
-
-      {viewMode === "ALERTS" && (
-        <>
-          <div className="flex items-center gap-2 mb-3">
-            <button
-              onClick={() => setAlertTab("OPERATIONAL")}
-              className={`px-3 py-1 rounded border text-xs ${
-                alertTab === "OPERATIONAL" ? "bg-white/10" : "hover:bg-white/5"
-              }`}
-            >
-              Operational
-            </button>
-            <button
-              onClick={() => setAlertTab("SYSTEM")}
-              className={`px-3 py-1 rounded border text-xs ${
-                alertTab === "SYSTEM" ? "bg-white/10" : "hover:bg-white/5"
-              }`}
-            >
-              System
-            </button>
-            <button
-              onClick={() => setShowResolvedAlerts((v) => !v)}
-              className="ml-auto px-3 py-1 rounded border text-xs"
-            >
-              {showResolvedAlerts ? "Showing: All" : "Showing: Open Only"}
-            </button>
-          </div>
-
-          {filteredAlerts.length === 0 ? (
-            <div className="text-sm opacity-50">No alerts found</div>
-          ) : (
-            <div className="space-y-2">
-              {filteredAlerts.map((a) => {
-                const status = String(a.status || "").toUpperCase();
-                const canResolve = status === "OPEN" && isAdmin;
-                const hasOpenCase = Number(a.open_case_count || 0) > 0;
-                const alertActionId = `alert-resolve-${a.id}`;
-                const caseActionId = `alert-case-${a.id}`;
-
-                return (
-                  <div
-                    key={a.id}
-                    className="glass rounded-lg p-3 border flex justify-between gap-3"
-                  >
-                    <div>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <div className="font-medium text-sm">{a.type || "ALERT"}</div>
-                        <Badge tone={toToneBySeverity(a.severity)}>Severity {a.severity}</Badge>
-                        <Badge tone={status === "RESOLVED" ? "green" : "neutral"}>{status}</Badge>
-                        <Badge tone={hasOpenCase ? "blue" : "neutral"}>
-                          Cases: {Number(a.open_case_count || 0)}
-                        </Badge>
-
-                        {canResolve && (
-                          <button
-                            onClick={() => resolveAlert(a.id)}
-                            disabled={actingId === alertActionId}
-                            className="px-2 py-1 rounded border text-[11px] disabled:opacity-50"
-                          >
-                            {actingId === alertActionId ? "Resolving..." : "Resolve"}
-                          </button>
-                        )}
-
-                        {isAdmin && (
-                          <button
-                            onClick={() => createCaseFromAlert(a)}
-                            disabled={actingId === caseActionId}
-                            className="px-2 py-1 rounded border text-[11px] border-cyan-500/40 text-cyan-300 disabled:opacity-50"
-                          >
-                            {hasOpenCase ? "View Case" : "Open Case"}
-                          </button>
-                        )}
-                      </div>
-
-                      <div className="text-xs opacity-60 mt-1">
-                        Store: {a.store_id || "GLOBAL"} - {a.entity_type}:{a.entity_id}
-                        {a.latest_case_ref ? ` - ${a.latest_case_ref}` : ""}
-                      </div>
-                    </div>
-
-                    <div className="text-xs opacity-60 whitespace-nowrap">
-                      {a.last_detected_at ? new Date(a.last_detected_at).toLocaleString() : "-"}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </>
-      )}
-
-      {viewMode === "CASES" && (
-        <>
-          <div className="flex items-center gap-2 mb-3">
-            <button
-              onClick={() => setCaseFilter("ACTIVE")}
-              className={`px-3 py-1 rounded border text-xs ${
-                caseFilter === "ACTIVE" ? "bg-white/10" : "hover:bg-white/5"
-              }`}
-            >
-              Active
-            </button>
-            <button
-              onClick={() => setCaseFilter("RESOLVED")}
-              className={`px-3 py-1 rounded border text-xs ${
-                caseFilter === "RESOLVED" ? "bg-white/10" : "hover:bg-white/5"
-              }`}
-            >
-              Resolved
-            </button>
-            <button
-              onClick={() => setCaseFilter("ALL")}
-              className={`px-3 py-1 rounded border text-xs ${
-                caseFilter === "ALL" ? "bg-white/10" : "hover:bg-white/5"
-              }`}
-            >
-              All
-            </button>
-          </div>
-
-          {filteredCases.length === 0 ? (
-            <div className="text-sm opacity-50">No cases found</div>
-          ) : (
-            <div className="space-y-3">
-              {filteredCases.map((c) => {
-                const status = String(c.status || "").toUpperCase();
-                const cid = Number(c.id || 0);
-                const actionIdStatus = `case-status-${cid}`;
-                const actionIdAssign = `case-assign-${cid}`;
-                const actionIdNote = `case-note-${cid}`;
-                const assigned =
-                  c.assigned_to_name || c.assigned_to_email || "Unassigned";
-
-                return (
-                  <div key={cid} className="glass rounded-lg p-3 border space-y-2">
-                    <div className="flex justify-between gap-3 items-start">
-                      <div>
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <div className="font-medium text-sm">
-                            {c.case_ref || `Case #${cid}`} - {c.title}
-                          </div>
-                          <Badge tone={toneByCasePriority(c.priority)}>
-                            {String(c.priority || "MEDIUM").toUpperCase()}
-                          </Badge>
-                          <Badge tone={toneByCaseStatus(status)}>{status}</Badge>
-                          <Badge tone="blue">Events: {Number(c.event_count || 0)}</Badge>
-                        </div>
-                        <div className="text-xs opacity-60 mt-1">
-                          Store: {c.store_id || "-"} - Assigned: {assigned}
-                          {c.alert_id ? ` - Alert #${c.alert_id}` : ""}
-                        </div>
-                      </div>
-                      <div className="text-xs opacity-60 whitespace-nowrap">
-                        {c.updated_at ? new Date(c.updated_at).toLocaleString() : "-"}
-                      </div>
-                    </div>
-
-                    {c.description && <div className="text-xs opacity-80">{c.description}</div>}
-
-                    <div className="flex gap-2 flex-wrap">
-                      {isAdmin && (
-                        <button
-                          onClick={() => assignCaseToMe(c)}
-                          disabled={actingId === actionIdAssign}
-                          className="px-2 py-1 rounded border text-[11px] border-cyan-500/40 text-cyan-300 disabled:opacity-50"
-                        >
-                          {actingId === actionIdAssign ? "Assigning..." : "Assign to Me"}
-                        </button>
-                      )}
-
-                      {isAdmin && status === "OPEN" && (
-                        <button
-                          onClick={() => updateCaseStatus(c, "IN_PROGRESS")}
-                          disabled={actingId === actionIdStatus}
-                          className="px-2 py-1 rounded border text-[11px] disabled:opacity-50"
-                        >
-                          {actingId === actionIdStatus ? "Updating..." : "Start"}
-                        </button>
-                      )}
-
-                      {isAdmin && (status === "OPEN" || status === "IN_PROGRESS") && (
-                        <button
-                          onClick={() => updateCaseStatus(c, "RESOLVED")}
-                          disabled={actingId === actionIdStatus}
-                          className="px-2 py-1 rounded border text-[11px] border-emerald-500/40 text-emerald-300 disabled:opacity-50"
-                        >
-                          {actingId === actionIdStatus ? "Updating..." : "Resolve"}
-                        </button>
-                      )}
-
-                      {isAdmin && status === "RESOLVED" && (
-                        <button
-                          onClick={() => updateCaseStatus(c, "OPEN")}
-                          disabled={actingId === actionIdStatus}
-                          className="px-2 py-1 rounded border text-[11px] disabled:opacity-50"
-                        >
-                          {actingId === actionIdStatus ? "Updating..." : "Reopen"}
-                        </button>
-                      )}
-                    </div>
-
-                    <div className="flex gap-2">
-                      <input
-                        value={noteDraftByCase[cid] || ""}
-                        onChange={(e) =>
-                          setNoteDraftByCase((prev) => ({
-                            ...prev,
-                            [cid]: e.target.value,
-                          }))
-                        }
-                        placeholder="Add case note..."
-                        className="flex-1 px-2 py-1 rounded border bg-white/5 border-white/10 text-xs"
-                      />
-                      <button
-                        onClick={() => addCaseNote(c)}
-                        disabled={actingId === actionIdNote}
-                        className="px-2 py-1 rounded border text-[11px] disabled:opacity-50"
-                      >
-                        {actingId === actionIdNote ? "Adding..." : "Add Note"}
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </>
-      )}
     </div>
   );
 }
