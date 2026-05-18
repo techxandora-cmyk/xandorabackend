@@ -612,6 +612,13 @@
     renderRecentEpcs();
   }
 
+  function removeRecentEpc(epc) {
+    const normalized = String(epc || "").toUpperCase();
+    if (!normalized) return;
+    state.recentEpcs = state.recentEpcs.filter((item) => item.epc !== normalized);
+    renderRecentEpcs();
+  }
+
   async function refreshHealthAndStatus() {
     try {
       const [health, session, status] = await Promise.all([
@@ -836,6 +843,11 @@
           if ((type === "live.scan" || type === "live.enter" || type === "live.touch") && data.item) {
             state.inZone = upsertByEpc(state.inZone, data.item);
             renderInZone();
+          }
+          if (type === "live.exit" && data.item?.epc) {
+            state.inZone = state.inZone.filter((item) => item.epc !== data.item.epc);
+            renderInZone();
+            removeRecentEpc(data.item.epc);
           }
           if (type === "live.scan" && data.epc) {
             upsertRecentEpc({

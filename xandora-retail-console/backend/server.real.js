@@ -19,7 +19,7 @@ const MAIN_API_URL = String(
 const RETAIL_DEVICE_ID = String(
   process.env.RETAIL_DEVICE_ID || "RETAIL_CONSOLE_01"
 ).trim();
-const IN_ZONE_TIMEOUT_MS = Number(process.env.DEMO_IN_ZONE_TIMEOUT_MS || 10000);
+const IN_ZONE_TIMEOUT_MS = Number(process.env.DEMO_IN_ZONE_TIMEOUT_MS || 1500);
 const RECENT_EPC_TTL_MS = 10 * 60 * 1000;
 const SESSION_IDLE_MS = Math.max(
   Number(process.env.RETAIL_SESSION_IDLE_MS || 12 * 60 * 60 * 1000),
@@ -78,6 +78,9 @@ function createRetailState() {
   };
 
   zoneTracker.subscribe((event) => {
+    if (event?.type === "live.exit" && event?.item?.epc) {
+      state.recentLiveEpcs.delete(normalizeEpc(event.item.epc));
+    }
     broadcastToState(state, event);
   });
 
@@ -499,7 +502,7 @@ function cleanupSessions() {
   }
 }
 
-setInterval(cleanupSessions, 60 * 1000).unref();
+setInterval(cleanupSessions, 500).unref();
 
 function startLiveBridge() {
   let reconnectTimer = null;
