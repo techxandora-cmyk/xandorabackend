@@ -286,7 +286,9 @@ export default function POS() {
         )}
 
         {cartItems.length === 0 && !loadingCart && (
-          <div className="text-xs opacity-40 py-2">No items scanned in the last 24 hours</div>
+          <div className="text-xs opacity-40 py-2">
+            No items scanned in the last {LIVE_SCAN_WINDOW_MINUTES} minutes
+          </div>
         )}
       </div>
 

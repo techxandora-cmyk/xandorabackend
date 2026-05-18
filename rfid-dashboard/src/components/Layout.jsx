@@ -26,13 +26,9 @@ const NAV_ITEMS_BY_PRODUCT = {
     { to: "", label: "Overview", icon: LayoutDashboard, perm: "dashboard.view_overview" },
     {
       to: "pos",
-      label: "Checkout",
+      label: "Transactions",
       icon: ShoppingCart,
-      anyOf: [
-        "dashboard.view_pos",
-        "dashboard.view_billing",
-        "dashboard.view_recent_scans",
-      ],
+      anyOf: ["dashboard.view_pos"],
     },
     { to: "devices", label: "Devices", icon: Cpu, perm: "dashboard.view_devices" },
     { to: "stock", label: "Stock", icon: Package, perm: "dashboard.view_stock" },

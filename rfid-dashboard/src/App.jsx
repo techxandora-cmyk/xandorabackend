@@ -68,7 +68,7 @@ export default function App() {
           path="pos"
           element={withRouteSuspense(
             <ProductRoute anyOf={["retail"]}>
-              <PermissionRoute anyOf={["dashboard.view_pos", "dashboard.view_billing", "dashboard.view_recent_scans"]}>
+              <PermissionRoute anyOf={["dashboard.view_pos"]}>
                 <CheckoutOps />
               </PermissionRoute>
             </ProductRoute>
@@ -385,10 +385,7 @@ function DefaultLanding() {
     return <Overview />;
   }
 
-  const canAccessCheckoutOps =
-    hasPermission("dashboard.view_pos") ||
-    hasPermission("dashboard.view_billing") ||
-    hasPermission("dashboard.view_recent_scans");
+  const canAccessCheckoutOps = hasPermission("dashboard.view_pos");
 
   if (canAccessCheckoutOps) {
     return <Navigate to="/pos" replace />;
