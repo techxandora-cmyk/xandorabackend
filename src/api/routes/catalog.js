@@ -144,6 +144,33 @@ module.exports = function buildCatalogRoutes(pool) {
     return result.rows.map(mapCatalogRow);
   }
 
+  async function loadAnyCatalogRowByEpc(storeId, epc) {
+    const result = await pool.query(
+      `
+      SELECT
+        store_id,
+        epc,
+        sku,
+        product_name,
+        brand,
+        category,
+        size_label,
+        color,
+        price_lkr,
+        metadata,
+        updated_at,
+        ${BARCODE_SQL} AS barcode
+      FROM catalog_items
+      WHERE store_id = $1
+        AND epc = $2
+      LIMIT 1
+      `,
+      [storeId, epc]
+    );
+
+    return result.rowCount ? mapCatalogRow(result.rows[0]) : null;
+  }
+
   router.use(authenticate);
 
   router.get("/", async (req, res) => {
@@ -611,7 +638,7 @@ module.exports = function buildCatalogRoutes(pool) {
       await client.query("COMMIT");
 
       const persistedRows = await loadCatalogRowsByEpcs(store_id, [epc]);
-      const persistedItem = persistedRows[0] || null;
+      const persistedItem = persistedRows[0] || (await loadAnyCatalogRowByEpc(store_id, epc));
       if (!persistedItem) {
         console.error("[catalog/upsert-item] item missing after commit", {
           store_id,
