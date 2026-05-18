@@ -363,6 +363,11 @@ async function fetchAssignments(session, limit = 1000) {
   );
 }
 
+async function hydrateSessionAssignments(session, limit = 1000) {
+  if (!session?.selectedStoreId) return [];
+  return fetchAssignments(session, limit);
+}
+
 async function lookupCatalogItem(session, epc, options = {}) {
   const normalized = normalizeEpc(epc);
   if (!normalized) return null;
@@ -669,6 +674,7 @@ app.post("/api/session/login", async (req, res) => {
     };
 
     sessions.set(sessionId, session);
+    hydrateSessionAssignments(session).catch(() => {});
 
     return res.json({
       ok: true,
@@ -696,6 +702,7 @@ app.post("/api/session/select-store", requireSession, async (req, res) => {
 
   req.retailSession.selectedStoreId = storeId;
   req.retailSession.state = createRetailState();
+  hydrateSessionAssignments(req.retailSession).catch(() => {});
   return res.json(sessionSummary(req.retailSession));
 });
 
@@ -1107,7 +1114,7 @@ app.get("/api/assignments/recent-epcs", requireSession, requireSelectedStore, as
         source: "Bin live zone",
         seenAt: liveItem.lastSeenAt,
         seenAtIso: new Date(liveItem.lastSeenAt).toISOString(),
-        assigned: Boolean(assignedItem || liveItem),
+        assigned: Boolean(assignedItem || liveItem?.name),
         item: assignedItem || liveItem || null,
       });
     }
@@ -1124,6 +1131,20 @@ app.get("/api/assignments/recent-epcs", requireSession, requireSelectedStore, as
         assigned: Boolean(assignedItem || row.assigned || row.item),
       });
     }
+
+    await Promise.all(
+      items
+        .filter((row) => !row.assigned)
+        .slice(0, 30)
+        .map(async (row) => {
+          const item = await lookupCatalogItem(req.retailSession, row.epc, {
+            forceRemote: true,
+          }).catch(() => null);
+          if (!item) return;
+          row.item = item;
+          row.assigned = true;
+        })
+    );
 
     items.sort((a, b) => Number(b.seenAt || 0) - Number(a.seenAt || 0));
     return res.json({ items: items.slice(0, 30), count: items.length });
