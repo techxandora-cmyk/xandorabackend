@@ -1,5 +1,6 @@
 ﻿import { useEffect, useState } from "react";
 import { apiGet } from "@/lib/api";
+import { buildEventsStreamUrl } from "@/config/api";
 import { useAuth } from "@/context/AuthContext";
 import MasterAdminOverview from "@/pages/MasterAdminOverview";
 
@@ -77,6 +78,20 @@ function readActiveStoreId() {
   return String(localStorage.getItem("xandora_store_id") || "")
     .trim()
     .toUpperCase();
+}
+
+function eventMatchesStore(data, storeId) {
+  const eventStore = String(
+    data?.store_id ||
+      data?.storeId ||
+      data?.store ||
+      data?.source_store_id ||
+      data?.transaction?.store_id ||
+      ""
+  )
+    .trim()
+    .toUpperCase();
+  return !eventStore || eventStore === String(storeId || "").toUpperCase();
 }
 
 function activityToneClass(eventType) {
@@ -567,7 +582,7 @@ function StoreOverview() {
         const shiftTarget =
           expectedCount > 0
             ? expectedCount
-            : Math.max(50, Math.ceil(Math.max(processedToday, 20) * 1.25));
+            : Math.max(1, processedToday);
         const shiftTargetSource = expectedCount > 0 ? "billing" : "auto";
 
         setExecutive({
@@ -641,13 +656,64 @@ function StoreOverview() {
       load();
     }
 
+    let liveRefreshTimer = null;
+    let eventSource = null;
+    const liveEventTypes = [
+      "scan",
+      "scan_metrics",
+      "pos_sale",
+      "pos_return",
+      "pos_confirmed",
+      "metrics_changed",
+      "devices_changed",
+      "alerts_changed",
+    ];
+
+    function queueLiveRefresh(evt) {
+      try {
+        const data = evt?.data ? JSON.parse(evt.data) : {};
+        const currentStoreId = readActiveStoreId();
+        if (!currentStoreId || !eventMatchesStore(data, currentStoreId)) return;
+
+        setLastUpdatedAt(new Date().toISOString());
+        setLiveActivity((prev) => [
+          {
+            id: `live-${evt.type}-${Date.now()}`,
+            eventType: evt.type,
+            ts: new Date().toISOString(),
+            message: buildActivityMessage({ event: evt.type, data }),
+          },
+          ...prev,
+        ].slice(0, 12));
+
+        if (liveRefreshTimer) clearTimeout(liveRefreshTimer);
+        liveRefreshTimer = setTimeout(load, 250);
+      } catch {
+        if (liveRefreshTimer) clearTimeout(liveRefreshTimer);
+        liveRefreshTimer = setTimeout(load, 500);
+      }
+    }
+
     load();
     intervalId = setInterval(load, 10000);
     window.addEventListener("xandora_store_changed", onStoreChanged);
+    try {
+      eventSource = new EventSource(buildEventsStreamUrl());
+      liveEventTypes.forEach((type) => {
+        eventSource.addEventListener(type, queueLiveRefresh);
+      });
+      eventSource.onerror = () => {
+        setSystem((prev) => ({ ...prev, apiOnline: false }));
+      };
+    } catch {
+      eventSource = null;
+    }
 
     return () => {
       cancelled = true;
       if (intervalId) clearInterval(intervalId);
+      if (liveRefreshTimer) clearTimeout(liveRefreshTimer);
+      if (eventSource) eventSource.close();
       window.removeEventListener("xandora_store_changed", onStoreChanged);
     };
   }, []);
@@ -718,14 +784,15 @@ function StoreOverview() {
   );
   const topBrandsToCheck = priorityBrandBreakdown(brandRiskRows, 3);
 
+  const hasShiftTarget = executive.shift_target_source === "billing";
   const shiftTarget = Math.max(1, toNumber(executive.shift_target || 0));
   const shiftProcessed = toNumber(executive.processed_today || 0);
-  const shiftProgressPct = Math.min(
-    100,
-    Math.round((shiftProcessed / shiftTarget) * 100)
-  );
-  const shiftTargetLabel =
-    executive.shift_target_source === "billing" ? "Billing target" : "Auto target";
+  const shiftProgressPct = hasShiftTarget
+    ? Math.min(100, Math.round((shiftProcessed / shiftTarget) * 100))
+    : shiftProcessed > 0
+      ? 100
+      : 0;
+  const shiftTargetLabel = hasShiftTarget ? "Billing target" : "Live count";
 
   const riskSnapshot =
     `Now: ${refillNowUnits} refill units, ` +
@@ -798,7 +865,9 @@ function StoreOverview() {
         {/* Shift progress — biggest card */}
         <div className="relative overflow-hidden rounded-xl border glass glow-border p-5 sm:col-span-1">
           <div className="absolute -right-8 -top-8 h-20 w-20 rounded-full bg-cyan-500/15 blur-2xl pointer-events-none" />
-          <div className="text-xs opacity-60 mb-3">Shift Progress</div>
+          <div className="text-xs opacity-60 mb-3">
+            {hasShiftTarget ? "Shift Progress" : "Today's RFID Activity"}
+          </div>
           <div className="flex items-end justify-between mb-2">
             <span className="text-3xl font-bold">{shiftProgressPct}%</span>
             <span className="text-xs opacity-50 pb-1">{shiftTargetLabel}</span>
@@ -810,7 +879,9 @@ function StoreOverview() {
             />
           </div>
           <div className="text-[11px] opacity-55 mt-2">
-            {shiftProcessed} of {shiftTarget} units processed today
+            {hasShiftTarget
+              ? `${shiftProcessed} of ${shiftTarget} units processed today`
+              : `${shiftProcessed} units scanned or billed today`}
           </div>
         </div>
 

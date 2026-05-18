@@ -551,6 +551,25 @@ router.get("/cart-items", authenticate, async (req, res) => {
 
         await client.query("COMMIT");
 
+        const broadcast = req.app.locals.broadcastEvent;
+        if (typeof broadcast === "function") {
+          broadcast("pos_return", {
+            source: "pos/return",
+            store_id,
+            ext_id: ext_id || null,
+            pos_txn_id: posTxnId,
+            transaction: posRow,
+            items_count: totalItems,
+            total_amount,
+            epcs,
+          });
+          broadcast("metrics_changed", {
+            source: "pos/return",
+            store_id,
+            pos_txn_id: posTxnId,
+          });
+        }
+
         return res.json({
           ok: true,
           transaction: posRow,
@@ -763,6 +782,25 @@ router.get("/cart-items", authenticate, async (req, res) => {
         }
 
         await client.query("COMMIT");
+
+        const broadcast = req.app.locals.broadcastEvent;
+        if (typeof broadcast === "function") {
+          broadcast("pos_sale", {
+            source: "pos/upload",
+            store_id: store_id || null,
+            ext_id: ext_id || null,
+            pos_txn_id: posTxnId,
+            transaction: posRow,
+            items_count: normalizedItems.length,
+            total_amount,
+            epcs: normalizedItems.map((item) => item.epc),
+          });
+          broadcast("metrics_changed", {
+            source: "pos/upload",
+            store_id: store_id || null,
+            pos_txn_id: posTxnId,
+          });
+        }
 
         return res.json({
           ok: true,

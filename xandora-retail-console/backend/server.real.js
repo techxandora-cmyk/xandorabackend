@@ -865,6 +865,60 @@ app.post("/api/pos/cart/clear", requireSession, (_req, res) =>
   res.json(_req.retailSession.state.cartStore.clear())
 );
 
+app.post("/api/pos/cart/checkout", requireSession, requireSelectedStore, async (req, res) => {
+  try {
+    const cart = req.retailSession.state.cartStore.snapshot();
+    if (!cart.items.length) {
+      return res.status(400).json({ ok: false, error: "Cart is empty" });
+    }
+
+    const extId = `retail-console-${req.retailSession.selectedStoreId}-${Date.now()}`;
+    const result = await authorizedFetch(req.retailSession, "retail", "/api/v1/pos/upload", {
+      method: "POST",
+      body: JSON.stringify({
+        ext_id: extId,
+        store_id: req.retailSession.selectedStoreId,
+        total_amount: cart.total,
+        items: cart.items.map((item) => ({
+          epc: item.epc,
+          price: Number(item.price || 0),
+        })),
+        metadata: {
+          source: "xandora-retail-console",
+          txn_type: "SALE",
+          cart_count: cart.count,
+        },
+      }),
+    });
+
+    const cleared = req.retailSession.state.cartStore.clear();
+    broadcastToState(req.retailSession.state, {
+      type: "pos.checkout.completed",
+      store_id: req.retailSession.selectedStoreId,
+      ext_id: extId,
+      total_amount: cart.total,
+      items_count: cart.count,
+      transaction: result?.transaction || null,
+      at: Date.now(),
+    });
+
+    return res.json({
+      ok: true,
+      ext_id: extId,
+      transaction: result?.transaction || null,
+      items_count: cart.count,
+      total_amount: cart.total,
+      cleared_cart: cleared,
+    });
+  } catch (err) {
+    console.error("[retail-console] cart checkout failed:", err);
+    return res.status(err.status || 500).json({
+      ok: false,
+      error: err.message || "Checkout failed",
+    });
+  }
+});
+
 app.get("/api/inventory/summary", requireSession, requireSelectedStore, async (req, res) => {
   try {
     const items = await fetchAssignments(req.retailSession, 1000);

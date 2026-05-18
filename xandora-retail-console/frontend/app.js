@@ -98,6 +98,7 @@
     checkoutModalDone: $("checkout-modal-done"),
     checkoutModalCount: $("checkout-modal-count"),
     checkoutModalTotal: $("checkout-modal-total"),
+    checkoutModalCopy: $("checkout-modal-copy"),
     eventLog: $("event-log"),
     authModal: $("auth-modal"),
     authMessage: $("auth-message"),
@@ -994,12 +995,35 @@
     }
   }
 
-  function openCheckoutModal() {
-    refs.checkoutModalCount.textContent = String(state.cart.count || 0);
-    refs.checkoutModalTotal.textContent = formatMoney(state.cart.total, state.cart.currency || "LKR");
-    refs.checkoutModal.hidden = false;
-    refs.checkoutModalDone.focus();
-    pushLog("Payment handoff opened");
+  async function checkoutCart() {
+    if (!state.cart.count) {
+      pushLog("Checkout blocked: cart is empty");
+      return;
+    }
+
+    refs.checkoutBtn.disabled = true;
+    refs.checkoutBtn.textContent = "Processing...";
+    try {
+      const result = await apiPost("/api/pos/cart/checkout");
+      refs.checkoutModalCount.textContent = String(result.items_count || 0);
+      refs.checkoutModalTotal.textContent = formatMoney(
+        result.total_amount,
+        state.cart.currency || "LKR"
+      );
+      refs.checkoutModalCopy.textContent =
+        "Sale recorded in Xandora. The web dashboard will update from this checkout.";
+      refs.checkoutModal.hidden = false;
+      refs.checkoutModalDone.focus();
+      state.cart = result.cleared_cart || { items: [], count: 0, total: 0, currency: "LKR" };
+      renderCart();
+      await Promise.all([refreshInventory(), refreshRecentEpcs()]).catch(() => {});
+      pushLog(`Checkout completed: ${result.items_count || 0} item(s)`);
+    } catch (err) {
+      pushLog(`Checkout failed: ${err.message}`);
+    } finally {
+      refs.checkoutBtn.disabled = false;
+      refs.checkoutBtn.textContent = "Checkout / Payment";
+    }
   }
 
   function closeCheckoutModal() {
@@ -1111,7 +1135,7 @@
     refs.tabs.assign.addEventListener("click", () => activateTab("assign"));
     refs.refreshBtn.addEventListener("click", () => refreshActiveView());
     refs.laundryFilter.addEventListener("change", renderLaundry);
-    refs.checkoutBtn.addEventListener("click", openCheckoutModal);
+    refs.checkoutBtn.addEventListener("click", checkoutCart);
     refs.checkoutModalClose.addEventListener("click", closeCheckoutModal);
     refs.checkoutModalDone.addEventListener("click", closeCheckoutModal);
     refs.checkoutModal.addEventListener("click", (evt) => {

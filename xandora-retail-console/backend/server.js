@@ -709,6 +709,30 @@ app.post("/api/pos/cart/clear", (_req, res) => {
   return res.json(cartStore.clear());
 });
 
+app.post("/api/pos/cart/checkout", (_req, res) => {
+  const cart = cartStore.snapshot();
+  if (!cart.items.length) {
+    return res.status(400).json({ ok: false, error: "Cart is empty" });
+  }
+
+  const cleared = cartStore.clear();
+  broadcast({
+    type: "pos.checkout.completed",
+    ext_id: `demo-retail-console-${Date.now()}`,
+    total_amount: cart.total,
+    items_count: cart.count,
+    at: Date.now(),
+  });
+
+  return res.json({
+    ok: true,
+    demo: true,
+    items_count: cart.count,
+    total_amount: cart.total,
+    cleared_cart: cleared,
+  });
+});
+
 const frontendRoot = path.join(__dirname, "..", "frontend");
 app.use(express.static(frontendRoot));
 app.get(/.*/, (_req, res) => {
