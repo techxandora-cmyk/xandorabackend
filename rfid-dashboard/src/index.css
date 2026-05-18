@@ -44,7 +44,9 @@ body,
 body {
   margin: 0;
   font-family: "Poppins", "Segoe UI", Tahoma, sans-serif;
-  background: linear-gradient(180deg, #f8fbff 0%, #eef4fb 100%);
+  background:
+    radial-gradient(circle at 24% 0%, rgba(65, 142, 218, 0.1), transparent 34rem),
+    linear-gradient(180deg, #f7fbff 0%, #edf4fb 100%);
   color: rgb(var(--base-text));
 }
 
@@ -378,14 +380,14 @@ html:not(.dark) [class*="text-violet-"] {
 
 /* -- Backgrounds: dark/black fills → very faint tint ---------- */
 html:not(.dark) [class*="bg-black/"] {
-  background-color: rgba(9, 21, 35, 0.04) !important;
+  background-color: rgba(255, 255, 255, 0.72) !important;
 }
 
 /* Low-opacity white fills (progress-bar tracks, hover rings) → visible gray */
 html:not(.dark) [class*="bg-white/1"],
 html:not(.dark) [class*="bg-white/5"],
 html:not(.dark) [class*="bg-white/8"] {
-  background-color: rgba(9, 21, 35, 0.07) !important;
+  background-color: rgba(9, 21, 35, 0.055) !important;
 }
 
 /* -- Borders: white/N → subtle navy outline ------------------- */
@@ -395,10 +397,11 @@ html:not(.dark) [class*="border-white/"] {
 
 /* -- Glass cards: give them a white surface in light mode ------ */
 html:not(.dark) .glass {
-  background-color: rgba(255, 255, 255, 0.82) !important;
+  border-color: rgba(110, 135, 160, 0.26) !important;
+  background-color: rgba(255, 255, 255, 0.92) !important;
   box-shadow:
-    0 1px 3px rgba(9, 21, 35, 0.06),
-    0 4px 14px rgba(9, 21, 35, 0.05) !important;
+    0 1px 2px rgba(9, 21, 35, 0.06),
+    0 10px 24px rgba(27, 55, 86, 0.08) !important;
 }
 
 /* -- Coloured badge/pill surfaces: lighten them for light bg --- */
@@ -462,7 +465,7 @@ html:not(.dark) [class*="bg-amber-400/"] {
 
 /* -- Bracket-notation ultra-low white fills (bg-white/[0.03] etc) */
 html:not(.dark) [class*="bg-white/["] {
-  background-color: rgba(9, 21, 35, 0.04) !important;
+  background-color: rgba(255, 255, 255, 0.72) !important;
 }
 
 /* -- Hover states that use white tints — make them a dark tint -- */
@@ -499,7 +502,11 @@ html:not(.dark) [class*="placeholder:text-white"]::placeholder {
 html:not(.dark) thead,
 html:not(.dark) [class*="bg-black/60"],
 html:not(.dark) [class*="bg-black/50"] {
-  background-color: rgba(9, 21, 35, 0.05) !important;
+  background-color: rgba(236, 243, 250, 0.9) !important;
+}
+
+html:not(.dark) tbody tr {
+  border-color: rgba(9, 21, 35, 0.1) !important;
 }
 
 /* -- Specific opacity-muted text: ensure it stays legible ------ */

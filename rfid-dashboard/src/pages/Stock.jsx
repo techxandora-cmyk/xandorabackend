@@ -175,24 +175,27 @@ export default function Stock() {
     if (bucket === 0) {
       return {
         label: "UNSOLD",
-        className: "border-emerald-500/40 text-emerald-300",
+        className:
+          "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
       };
     }
     if (bucket === 1) {
       return {
         label: "SOLD",
-        className: "border-amber-500/40 text-amber-300",
+        className:
+          "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300",
       };
     }
     if (bucket === 2) {
       return {
         label: "RETURNED",
-        className: "border-cyan-500/40 text-cyan-300",
+        className:
+          "border-cyan-500/40 bg-cyan-500/10 text-cyan-700 dark:text-cyan-300",
       };
     }
     return {
       label: "N/A",
-      className: "border-white/20 text-white/70",
+      className: "border-slate-300 text-slate-500 dark:border-white/20 dark:text-white/70",
     };
   }, [statusBucket]);
 
@@ -322,12 +325,12 @@ export default function Stock() {
     <div className="mx-auto w-full max-w-6xl px-4 py-6">
       <div className="mb-6">
         <h1 className="text-2xl font-semibold">Stock</h1>
-        <p className="text-sm text-white/60">
+        <p className="text-sm text-slate-600 dark:text-white/60">
           Live stock visibility by barcode, EPC, SKU, brand, or product name
         </p>
       </div>
 
-      <div className="mb-6 rounded-xl border border-cyan-500/25 bg-cyan-500/10 px-4 py-3 text-sm text-cyan-100/90">
+      <div className="mb-6 rounded-xl border border-cyan-500/25 bg-cyan-500/10 px-4 py-3 text-sm text-cyan-800 shadow-sm dark:text-cyan-100/90">
         Stock visibility stays in Retail. Controlled counts, audits, and reconciliation live in
         Xandora Stock Audit.
       </div>
@@ -340,31 +343,31 @@ export default function Stock() {
 
       <form
         onSubmit={onSubmit}
-        className="mb-6 rounded-xl border border-white/10 bg-black/40 p-4"
+        className="mb-6 rounded-xl border border-slate-200/80 bg-white/90 p-4 shadow-[0_10px_28px_rgba(27,55,86,0.07)] dark:border-white/10 dark:bg-black/40 dark:shadow-none"
       >
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="Master search: barcode / EPC / SKU / product"
-            className="rounded border border-white/15 bg-transparent px-3 py-2 text-sm"
+            className="rounded border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 dark:border-white/15 dark:bg-transparent dark:text-white"
           />
           <input
             value={brand}
             onChange={(e) => setBrand(e.target.value)}
             placeholder="Filter by brand"
-            className="rounded border border-white/15 bg-transparent px-3 py-2 text-sm"
+            className="rounded border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 dark:border-white/15 dark:bg-transparent dark:text-white"
           />
           <input
             value={barcode}
             onChange={(e) => setBarcode(e.target.value)}
             placeholder="Barcode filter"
-            className="rounded border border-white/15 bg-transparent px-3 py-2 text-sm"
+            className="rounded border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 dark:border-white/15 dark:bg-transparent dark:text-white"
           />
         </div>
 
         <div className="mt-3 flex flex-wrap items-center gap-2">
-          <span className="text-xs text-white/60">Status:</span>
+          <span className="text-xs text-slate-600 dark:text-white/60">Status:</span>
           <FilterChip
             active={statusFilter === "all"}
             onClick={() => setStatusFilter("all")}
@@ -386,11 +389,11 @@ export default function Stock() {
             label="Returned"
           />
 
-          <span className="ml-2 text-xs text-white/60">Sort:</span>
+          <span className="ml-2 text-xs text-slate-600 dark:text-white/60">Sort:</span>
           <select
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value)}
-            className="rounded border border-white/15 bg-black/40 px-2 py-1.5 text-xs"
+            className="rounded border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-900 dark:border-white/15 dark:bg-black/40 dark:text-white"
           >
             <option value="stock_priority">Unsold - Sold - Returned</option>
             <option value="product_az">Product A-Z</option>
@@ -402,7 +405,7 @@ export default function Stock() {
         <div className="mt-3 flex items-center gap-2">
           <button
             type="submit"
-            className="rounded border border-purple-500/40 px-4 py-2 text-sm text-purple-300 hover:bg-purple-500/10"
+            className="rounded border border-purple-500/40 bg-purple-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-purple-700 disabled:opacity-60 dark:bg-transparent dark:text-purple-300 dark:hover:bg-purple-500/10"
             disabled={loading}
           >
             {loading ? "Searching..." : "Search"}
@@ -410,12 +413,12 @@ export default function Stock() {
           <button
             type="button"
             onClick={clearFilters}
-            className="rounded border border-white/15 px-4 py-2 text-sm hover:bg-white/10"
+            className="rounded border border-slate-300 bg-white px-4 py-2 text-sm text-slate-900 hover:bg-slate-50 disabled:opacity-60 dark:border-white/15 dark:bg-transparent dark:text-white dark:hover:bg-white/10"
             disabled={loading}
           >
             Clear
           </button>
-          <div className="ml-auto text-xs text-white/50">
+          <div className="ml-auto text-xs text-slate-600 dark:text-white/50">
             Store <strong>{storeId}</strong>
           </div>
         </div>
@@ -429,24 +432,24 @@ export default function Stock() {
         <Card title="Returned" value={displaySummary.returned_tags} />
       </div>
 
-      <div className="mb-3 text-xs text-white/50">
+      <div className="mb-3 text-xs text-slate-600 dark:text-white/50">
         Filters: q={lastFilters.q || "-"} | brand={lastFilters.brand || "-"} | barcode=
         {lastFilters.barcode || "-"} | status={statusFilter} | sort={sortBy}
       </div>
 
-      <div className="rounded-xl border border-white/10 bg-black/40 overflow-hidden">
-        <div className="px-4 py-3 border-b border-white/10 text-sm font-semibold">
+      <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-white/90 shadow-[0_10px_28px_rgba(27,55,86,0.07)] dark:border-white/10 dark:bg-black/40 dark:shadow-none">
+        <div className="border-b border-slate-200 px-4 py-3 text-sm font-semibold dark:border-white/10">
           Stock Search Results
         </div>
 
         {loading && rowsFilteredSorted.length === 0 ? (
-          <div className="px-4 py-6 text-sm text-white/50">Loading stock data...</div>
+          <div className="px-4 py-6 text-sm text-slate-500 dark:text-white/50">Loading stock data...</div>
         ) : rowsFilteredSorted.length === 0 ? (
-          <div className="px-4 py-6 text-sm text-white/50">No matching stock items</div>
+          <div className="px-4 py-6 text-sm text-slate-500 dark:text-white/50">No matching stock items</div>
         ) : (
           <div className="overflow-auto">
             <table className="w-full text-xs">
-              <thead className="bg-white/5 text-white/60">
+              <thead className="bg-slate-100 text-slate-600 dark:bg-white/5 dark:text-white/60">
                 <tr>
                   <th className="px-4 py-3 text-left">Action</th>
                   <th className="px-4 py-3 text-left">Barcode</th>
@@ -472,15 +475,15 @@ export default function Stock() {
 
                   return (
                     <Fragment key={key}>
-                      <tr className="border-t border-white/10 hover:bg-white/5">
+                      <tr className="border-t border-slate-200 hover:bg-slate-50 dark:border-white/10 dark:hover:bg-white/5">
                         <td className="px-4 py-3">
                           <button
                             type="button"
                             onClick={() => toggleDetails(r, idx)}
                             className={`rounded border px-3 py-1 text-[11px] transition ${
                               open
-                                ? "border-cyan-500/50 text-cyan-300 bg-cyan-500/10"
-                                : "border-white/15 hover:bg-white/10"
+                                ? "border-cyan-500/50 bg-cyan-500/10 text-cyan-700 dark:text-cyan-300"
+                                : "border-slate-300 text-slate-700 hover:bg-slate-100 dark:border-white/15 dark:text-white dark:hover:bg-white/10"
                             }`}
                           >
                             {open ? "Hide EPCs" : "View EPCs"}
@@ -498,22 +501,22 @@ export default function Stock() {
                         <td className="px-4 py-3">{r.category || "-"}</td>
                         <td className="px-4 py-3">{r.size_label || "-"}</td>
                         <td className="px-4 py-3 text-right">{r.total_tags || 0}</td>
-                        <td className="px-4 py-3 text-right text-emerald-300">
+                        <td className="px-4 py-3 text-right text-emerald-700 dark:text-emerald-300">
                           {r.in_stock_count || 0}
                         </td>
-                        <td className="px-4 py-3 text-right text-amber-300">
+                        <td className="px-4 py-3 text-right text-amber-700 dark:text-amber-300">
                           {r.sold_count || 0}
                         </td>
-                        <td className="px-4 py-3 text-right text-cyan-300">
+                        <td className="px-4 py-3 text-right text-cyan-700 dark:text-cyan-300">
                           {r.returned_count || 0}
                         </td>
                       </tr>
 
                       {open ? (
-                        <tr className="border-t border-white/10 bg-white/[0.02]">
+                        <tr className="border-t border-slate-200 bg-slate-50/80 dark:border-white/10 dark:bg-white/[0.02]">
                           <td colSpan={12} className="px-4 py-4">
                             {detailLoading && !details ? (
-                              <div className="text-xs text-white/50">Loading EPC details...</div>
+                              <div className="text-xs text-slate-500 dark:text-white/50">Loading EPC details...</div>
                             ) : detailError ? (
                               <div className="rounded border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300">
                                 {detailError}
@@ -527,9 +530,9 @@ export default function Stock() {
                                   <MiniCard title="Returned" value={details.summary.returned_tags} />
                                 </div>
 
-                                <div className="overflow-auto rounded border border-white/10">
+                                <div className="overflow-auto rounded border border-slate-200 dark:border-white/10">
                                   <table className="w-full text-[11px]">
-                                    <thead className="bg-white/5 text-white/60">
+                                    <thead className="bg-slate-100 text-slate-600 dark:bg-white/5 dark:text-white/60">
                                       <tr>
                                         <th className="px-3 py-2 text-left">EPC</th>
                                         <th className="px-3 py-2 text-left">State</th>
@@ -559,17 +562,17 @@ export default function Stock() {
                                         .map((item) => (
                                         <tr
                                           key={item.epc}
-                                          className="border-t border-white/10 hover:bg-white/5"
+                                          className="border-t border-slate-200 hover:bg-white dark:border-white/10 dark:hover:bg-white/5"
                                         >
                                           <td className="px-3 py-2 font-mono">{item.epc}</td>
                                           <td className="px-3 py-2">
                                             <span
                                               className={
                                                 item.stock_state === "SOLD"
-                                                  ? "text-amber-300"
+                                                  ? "text-amber-700 dark:text-amber-300"
                                                   : item.stock_state === "RETURNED"
-                                                  ? "text-cyan-300"
-                                                  : "text-emerald-300"
+                                                  ? "text-cyan-700 dark:text-cyan-300"
+                                                  : "text-emerald-700 dark:text-emerald-300"
                                               }
                                             >
                                               {item.stock_state}
@@ -591,7 +594,7 @@ export default function Stock() {
                                 </div>
                               </div>
                             ) : (
-                              <div className="text-xs text-white/50">No EPC details available</div>
+                              <div className="text-xs text-slate-500 dark:text-white/50">No EPC details available</div>
                             )}
                           </td>
                         </tr>
@@ -610,8 +613,8 @@ export default function Stock() {
 
 function Card({ title, value }) {
   return (
-    <div className="rounded-xl border border-white/10 bg-black/40 p-4">
-      <div className="text-xs text-white/50">{title}</div>
+    <div className="rounded-xl border border-slate-200/80 bg-white/90 p-4 shadow-[0_8px_20px_rgba(27,55,86,0.06)] dark:border-white/10 dark:bg-black/40 dark:shadow-none">
+      <div className="text-xs text-slate-600 dark:text-white/50">{title}</div>
       <div className="mt-1 text-2xl font-semibold">{value ?? 0}</div>
     </div>
   );
@@ -624,8 +627,8 @@ function FilterChip({ active, onClick, label }) {
       onClick={onClick}
       className={`rounded-full border px-3 py-1 text-xs transition ${
         active
-          ? "border-purple-500/50 bg-purple-500/10 text-purple-300"
-          : "border-white/15 text-white/80 hover:bg-white/10"
+          ? "border-purple-500/50 bg-purple-500/10 text-purple-700 dark:text-purple-300"
+          : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50 dark:border-white/15 dark:bg-transparent dark:text-white/80 dark:hover:bg-white/10"
       }`}
     >
       {label}
@@ -635,8 +638,8 @@ function FilterChip({ active, onClick, label }) {
 
 function MiniCard({ title, value }) {
   return (
-    <div className="rounded border border-white/10 bg-black/40 px-3 py-2">
-      <div className="text-[11px] text-white/50">{title}</div>
+    <div className="rounded border border-slate-200 bg-white px-3 py-2 dark:border-white/10 dark:bg-black/40">
+      <div className="text-[11px] text-slate-500 dark:text-white/50">{title}</div>
       <div className="mt-1 text-sm font-semibold">{value ?? 0}</div>
     </div>
   );
