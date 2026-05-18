@@ -5,6 +5,7 @@ Use this on deployment day for the hosted retail console that connects to the ma
 ## Current Expected Config
 
 - Render service name: `xandora-retail-console`
+- Live Render URL: `https://xandora-retail-console.onrender.com/`
 - Render root dir: `xandora-retail-console`
 - Render start command: `npm start`
 - Retail console health check: `/api/health`
@@ -39,11 +40,11 @@ Use this on deployment day for the hosted retail console that connects to the ma
    - `https://xandorabackend-44dt.onrender.com/api/health/live`
 3. Deploy the retail console service.
 4. Wait for retail console health to return `200` on:
-   - `https://<retail-console-host>/api/health`
+   - `https://xandora-retail-console.onrender.com/api/health`
 
 ## Render Smoke Checks
 
-1. Open the retail console URL in the browser.
+1. Open `https://xandora-retail-console.onrender.com/` in the browser.
 2. Confirm the login modal appears immediately.
 3. Confirm the page does not show the demo feed controls as active demo mode.
 4. Confirm the health endpoint returns JSON with:

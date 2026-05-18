@@ -2,11 +2,13 @@
   const $ = (id) => document.getElementById(id);
   const SESSION_STORAGE_KEY = "xandora_retail_console_session";
   const REMEMBERED_EMAIL_KEY = "xandora_retail_console_email";
+  const THEME_STORAGE_KEY = "xandora_retail_console_theme";
   const LIVE_BIN_MAX_AGE_SEC = 10;
 
   const state = {
     activeView: "billing",
     runtimeMode: "demo",
+    theme: localStorage.getItem(THEME_STORAGE_KEY) || "dark",
     sessionId: localStorage.getItem(SESSION_STORAGE_KEY) || "",
     rememberedEmail: localStorage.getItem(REMEMBERED_EMAIL_KEY) || "",
     session: null,
@@ -36,6 +38,8 @@
     logoutBtn: $("logout-btn"),
     bridgeStatus: $("bridge-status"),
     simStatus: $("sim-status"),
+    themeToggleBtn: $("theme-toggle-btn"),
+    themeToggleLabel: $("theme-toggle-label"),
     simToggleBtn: $("sim-toggle-btn"),
     tabs: {
       billing: $("tab-billing"),
@@ -163,6 +167,28 @@
     refs.simStatus.className = `pill ${isRunning ? "ok" : "muted"}`;
     refs.simToggleBtn.hidden = false;
     refs.simToggleBtn.textContent = isRunning ? "Stop Demo Feed" : "Start Demo Feed";
+  }
+
+  function setTheme(theme) {
+    const nextTheme = theme === "light" ? "light" : "dark";
+    state.theme = nextTheme;
+    document.documentElement.dataset.theme = nextTheme;
+    localStorage.setItem(THEME_STORAGE_KEY, nextTheme);
+    if (refs.themeToggleBtn) {
+      const isLight = nextTheme === "light";
+      refs.themeToggleBtn.setAttribute("aria-pressed", String(isLight));
+      refs.themeToggleBtn.setAttribute(
+        "aria-label",
+        isLight ? "Switch to dark mode" : "Switch to light mode"
+      );
+    }
+    if (refs.themeToggleLabel) {
+      refs.themeToggleLabel.textContent = nextTheme === "light" ? "Light" : "Dark";
+    }
+  }
+
+  function toggleTheme() {
+    setTheme(state.theme === "light" ? "dark" : "light");
   }
 
   function pushLog(message) {
@@ -1033,6 +1059,7 @@
   }
 
   function bindUi() {
+    refs.themeToggleBtn.addEventListener("click", toggleTheme);
     refs.tabs.billing.addEventListener("click", () => activateTab("billing"));
     refs.tabs.inventory.addEventListener("click", () => activateTab("inventory"));
     refs.tabs.laundry.addEventListener("click", () => activateTab("laundry"));
@@ -1278,6 +1305,7 @@
   }
 
   async function init() {
+    setTheme(state.theme);
     bindUi();
     activateTab("billing");
     const restored = await restoreSession();

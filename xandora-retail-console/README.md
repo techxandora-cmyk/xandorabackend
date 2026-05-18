@@ -2,6 +2,10 @@
 
 RFID billing, inventory intake, and laundry console for customer showcases.
 
+Live Render console:
+
+`https://xandora-retail-console.onrender.com/`
+
 ## Quick Start
 
 ```powershell

@@ -4,6 +4,12 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Xandora Retail Console</title>
+    <script>
+      (function () {
+        var theme = localStorage.getItem("xandora_retail_console_theme") || "dark";
+        document.documentElement.dataset.theme = theme === "light" ? "light" : "dark";
+      })();
+    </script>
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
@@ -25,6 +31,12 @@
           <span id="api-status" class="pill danger">API Offline</span>
           <span id="bridge-status" class="pill muted" hidden>Live Reader</span>
           <span id="sim-status" class="pill muted">Demo Feed</span>
+          <button id="theme-toggle-btn" class="theme-toggle" type="button" aria-label="Switch to light mode" aria-pressed="false">
+            <span class="theme-toggle-track" aria-hidden="true">
+              <span class="theme-toggle-knob"></span>
+            </span>
+            <span id="theme-toggle-label">Dark</span>
+          </button>
           <button id="sim-toggle-btn" class="btn btn-outline" type="button">Start Demo Feed</button>
           <button id="logout-btn" class="btn btn-outline" type="button" hidden>Log out</button>
           <button id="close-demo-btn" class="btn btn-danger" type="button">Close</button>
