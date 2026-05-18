@@ -760,6 +760,24 @@ th {
   font-weight: 700;
 }
 
+.auth-error {
+  color: #ffd7df;
+}
+
+html[data-theme="light"] .auth-error {
+  color: #9a2639;
+}
+
+.auth-form .btn:disabled,
+.auth-form .text-input:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+
+.auth-form .btn:disabled {
+  filter: saturate(0.82);
+}
+
 #switch-store-btn {
   white-space: nowrap;
 }

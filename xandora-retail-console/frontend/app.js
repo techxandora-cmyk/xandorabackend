@@ -261,34 +261,62 @@
     }
   }
 
-  function showAuthModal(message, stores = [], mode = "login") {
+  function setAuthMessage(message, isError = false) {
     refs.authMessage.textContent =
       message || "Sign in with your Xandora account to open your customer store.";
+    refs.authMessage.classList.toggle("auth-error", Boolean(isError));
+  }
+
+  function setAuthBusy(isBusy, label = "Signing in...") {
+    refs.authSubmit.disabled = Boolean(isBusy);
+    refs.authSubmit.textContent = isBusy ? label : getAuthSubmitLabel();
+    refs.authEmail.disabled = Boolean(isBusy || state.pendingStores.length);
+    refs.authPassword.disabled = Boolean(isBusy || state.pendingStores.length);
+    refs.authStore.disabled = Boolean(isBusy);
+  }
+
+  function getAuthSubmitLabel() {
+    if (!state.pendingStores.length) return "Sign in";
+    return state.authMode === "switch-store" ? "Switch Store" : "Open Store";
+  }
+
+  function showAuthModal(message, stores = [], mode = "login") {
     state.authMode = mode;
     state.pendingStores = Array.isArray(stores) ? stores : [];
+    setAuthMessage(message, false);
     refs.authStoreWrap.hidden = !state.pendingStores.length;
     refs.authStore.innerHTML = state.pendingStores
       .map((storeId) => `<option value="${escapeHtml(storeId)}">${escapeHtml(storeId)}</option>`)
       .join("");
     refs.authEmail.value = state.rememberedEmail || refs.authEmail.value || "";
-    refs.authPassword.value = "";
+    if (!state.pendingStores.length) {
+      refs.authPassword.value = "";
+    }
     refs.authPassword.disabled = Boolean(state.pendingStores.length);
     refs.authEmail.disabled = Boolean(state.pendingStores.length);
-    refs.authSubmit.textContent = state.pendingStores.length
-      ? mode === "switch-store"
-        ? "Switch Store"
-        : "Open Store"
-      : "Sign in";
+    refs.authStore.disabled = false;
+    refs.authSubmit.disabled = false;
+    refs.authSubmit.textContent = getAuthSubmitLabel();
     refs.authModal.hidden = false;
+    setTimeout(() => {
+      if (state.pendingStores.length) {
+        refs.authStore.focus();
+      } else {
+        (refs.authEmail.value ? refs.authPassword : refs.authEmail).focus();
+      }
+    }, 0);
   }
 
   function hideAuthModal() {
     refs.authModal.hidden = true;
     refs.authPassword.disabled = false;
     refs.authEmail.disabled = false;
+    refs.authStore.disabled = false;
+    refs.authSubmit.disabled = false;
     refs.authStoreWrap.hidden = true;
     refs.authStore.innerHTML = "";
     refs.authSubmit.textContent = "Sign in";
+    refs.authMessage.classList.remove("auth-error");
     state.authMode = "login";
   }
 
@@ -994,15 +1022,19 @@
 
   async function handleLoginSubmit(evt) {
     evt.preventDefault();
+    if (refs.authSubmit.disabled) return;
 
     try {
       if (state.pendingStores.length) {
+        setAuthBusy(true, "Opening store...");
         const selectedStore = String(refs.authStore.value || "").trim();
         await selectStore(selectedStore);
         return;
       }
 
       const email = refs.authEmail.value.trim().toLowerCase();
+      setAuthMessage("Signing in securely...", false);
+      setAuthBusy(true, "Signing in...");
 
       const response = await fetch("/api/session/login", {
         method: "POST",
@@ -1034,7 +1066,12 @@
       startLiveBinPrune();
       await refreshAll();
     } catch (err) {
-      showAuthModal(err.message || "Login failed");
+      setAuthMessage(err.message || "Login failed", true);
+      (state.pendingStores.length ? refs.authStore : refs.authPassword).focus();
+    } finally {
+      if (!refs.authModal.hidden) {
+        setAuthBusy(false);
+      }
     }
   }
 
@@ -1047,6 +1084,14 @@
     try {
       const session = await apiGet("/api/session/status");
       state.session = session;
+      if (session?.authenticated && !session.selected_store_id && Array.isArray(session.stores)) {
+        if (session.stores.length === 1) {
+          await selectStore(session.stores[0]);
+        } else {
+          showAuthModal("Select the store you want to open.", session.stores || []);
+        }
+        return false;
+      }
       updateSessionChrome();
       applyProductVisibility();
       hideAuthModal();

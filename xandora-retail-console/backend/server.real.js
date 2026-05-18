@@ -222,15 +222,17 @@ async function loginAvailableProducts(email, password) {
   tokens.retail = retailToken;
   products.push("retail");
 
-  for (const productKey of ["stock_audit", "laundry"]) {
-    try {
-      const token = await loginProduct(email, password, productKey);
-      tokens[productKey] = token;
-      products.push(productKey);
-    } catch (_err) {
-      // Product not enabled for this account; keep optional.
-    }
-  }
+  await Promise.all(
+    ["stock_audit", "laundry"].map(async (productKey) => {
+      try {
+        const token = await loginProduct(email, password, productKey);
+        tokens[productKey] = token;
+        products.push(productKey);
+      } catch (_err) {
+        // Product not enabled for this account; keep optional.
+      }
+    })
+  );
 
   return { tokens, products };
 }
