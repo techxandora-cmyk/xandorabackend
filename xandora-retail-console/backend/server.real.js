@@ -563,18 +563,23 @@ function startLiveBridge() {
               if (!epc) continue;
 
               const cachedItem = getCachedAssignment(session, epc);
+              const cachedZoneItem = cachedItem ? toZoneItem(cachedItem) : null;
               rememberRecentEpc(session.state, epc, {
                 source: eventName === "scan" ? "Live reader" : "Zone heartbeat",
                 assigned: Boolean(cachedItem),
                 item: cachedItem,
               });
 
+              if (cachedZoneItem) {
+                session.state.zoneTracker.touch(cachedZoneItem, Date.now());
+              }
+
               broadcastToState(session.state, {
                 type: "live.raw",
                 epc,
                 source: eventName === "scan" ? "Live reader" : "Zone heartbeat",
                 assigned: Boolean(cachedItem),
-                item: cachedItem ? toZoneItem(cachedItem) : null,
+                item: cachedZoneItem,
                 at: Date.now(),
               });
 
@@ -1092,31 +1097,31 @@ app.get("/api/assignments", requireSession, requireSelectedStore, async (req, re
 
 app.get("/api/assignments/recent-epcs", requireSession, requireSelectedStore, async (req, res) => {
   try {
-    const assignments = await fetchAssignments(req.retailSession, 1000);
-    const assignmentByEpc = new Map(assignments.map((item) => [item.epc, item]));
     const items = [];
     const state = req.retailSession.state;
 
     for (const liveItem of state.zoneTracker.list()) {
+      const assignedItem = getCachedAssignment(req.retailSession, liveItem.epc);
       items.push({
         epc: liveItem.epc,
         source: "Bin live zone",
         seenAt: liveItem.lastSeenAt,
         seenAtIso: new Date(liveItem.lastSeenAt).toISOString(),
-        assigned: assignmentByEpc.has(liveItem.epc),
-        item: assignmentByEpc.get(liveItem.epc) || null,
+        assigned: Boolean(assignedItem || liveItem),
+        item: assignedItem || liveItem || null,
       });
     }
 
     for (const row of state.recentLiveEpcs.values()) {
       if (items.some((item) => item.epc === row.epc)) continue;
+      const assignedItem = getCachedAssignment(req.retailSession, row.epc);
       items.push({
         epc: row.epc,
         source: row.source || "Live reader",
         seenAt: row.seenAt,
         seenAtIso: new Date(row.seenAt).toISOString(),
-        item: assignmentByEpc.get(row.epc) || row.item || null,
-        assigned: assignmentByEpc.has(row.epc) || Boolean(row.assigned || row.item),
+        item: assignedItem || row.item || null,
+        assigned: Boolean(assignedItem || row.assigned || row.item),
       });
     }
 

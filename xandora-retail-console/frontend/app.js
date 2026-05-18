@@ -883,7 +883,9 @@
             : type.startsWith("laundry.")
             ? "laundry"
             : "live";
-          scheduleLiveRefresh(refreshScope);
+          if (type !== "live.raw") {
+            scheduleLiveRefresh(refreshScope);
+          }
         }
       } catch (_err) {
         pushLog("Invalid event payload");
