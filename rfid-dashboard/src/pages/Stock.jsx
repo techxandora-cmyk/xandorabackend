@@ -1,5 +1,6 @@
 ﻿import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { apiGet } from "@/lib/api";
+import { buildEventsStreamUrl } from "@/config/api";
 
 function toNum(v) {
   const n = Number(v);
@@ -92,6 +93,43 @@ export default function Stock() {
     window.addEventListener("xandora_store_changed", onStoreChanged);
     return () => window.removeEventListener("xandora_store_changed", onStoreChanged);
   }, []);
+
+  useEffect(() => {
+    if (!storeId) return undefined;
+
+    let refreshTimer = null;
+    const eventSource = new EventSource(buildEventsStreamUrl());
+
+    function sameStore(event) {
+      try {
+        const data = JSON.parse(event?.data || "{}");
+        const eventStoreId = String(data?.store_id || data?.storeId || "")
+          .trim()
+          .toUpperCase();
+        return !eventStoreId || eventStoreId === String(storeId || "").trim().toUpperCase();
+      } catch {
+        return true;
+      }
+    }
+
+    function scheduleRefresh(event) {
+      if (!sameStore(event)) return;
+      window.clearTimeout(refreshTimer);
+      refreshTimer = window.setTimeout(() => {
+        loadStock();
+      }, 350);
+    }
+
+    eventSource.addEventListener("catalog_item_upserted", scheduleRefresh);
+    eventSource.addEventListener("stock_changed", scheduleRefresh);
+    eventSource.addEventListener("pos_sale", scheduleRefresh);
+    eventSource.addEventListener("pos_return", scheduleRefresh);
+
+    return () => {
+      window.clearTimeout(refreshTimer);
+      eventSource.close();
+    };
+  }, [loadStock, storeId]);
 
   function onSubmit(e) {
     e.preventDefault();

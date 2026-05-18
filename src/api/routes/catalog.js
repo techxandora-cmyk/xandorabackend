@@ -610,6 +610,32 @@ module.exports = function buildCatalogRoutes(pool) {
 
       await client.query("COMMIT");
 
+      const broadcast = req.app.locals.broadcastEvent;
+      if (typeof broadcast === "function") {
+        const eventPayload = {
+          store_id,
+          epc,
+          sku,
+          product_name,
+          brand,
+          category,
+          size_label,
+          color,
+          price_lkr,
+          barcode: barcode || null,
+          source: "catalog.upsert-item",
+          at: new Date().toISOString(),
+        };
+
+        broadcast("catalog_item_upserted", eventPayload);
+        broadcast("stock_changed", eventPayload);
+        broadcast("metrics_changed", {
+          store_id,
+          source: "catalog.upsert-item",
+          at: eventPayload.at,
+        });
+      }
+
       return res.json({ ok: true, item });
     } catch (err) {
       await client.query("ROLLBACK");
