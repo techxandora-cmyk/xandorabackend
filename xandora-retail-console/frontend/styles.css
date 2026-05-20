@@ -846,8 +846,10 @@ th {
     background: #ffffff !important;
   }
 
-  body * {
-    visibility: hidden !important;
+  .app-shell,
+  .modal-backdrop,
+  .auth-backdrop {
+    display: none !important;
   }
 
   .receipt-print-area,
@@ -856,11 +858,12 @@ th {
   }
 
   .receipt-print-area {
-    display: block;
-    position: absolute;
-    inset: 0 auto auto 0;
+    display: block !important;
+    position: static !important;
     width: 72mm;
     padding: 0;
+    color: #111111 !important;
+    background: #ffffff !important;
   }
 }
 

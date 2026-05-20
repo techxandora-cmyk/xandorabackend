@@ -433,10 +433,9 @@
           <div class="row-actions">
             ${
               returnOnly
-                ? ""
+                ? `<button class="btn btn-small btn-outline action-return-live" data-epc="${escapeHtml(item.epc)}" type="button">Return</button>`
                 : `<button class="btn btn-small action-add" data-epc="${escapeHtml(item.epc)}" type="button">Add to Bill</button>`
             }
-            <button class="btn btn-small btn-outline action-return-live" data-epc="${escapeHtml(item.epc)}" type="button">Return</button>
           </div>
         </td>
       </tr>`;
@@ -1744,6 +1743,9 @@
 
   async function init() {
     setTheme(state.theme);
+    if (refs.receiptPrintArea && refs.receiptPrintArea.parentElement !== document.body) {
+      document.body.appendChild(refs.receiptPrintArea);
+    }
     loadRecentBills();
     renderRecentBills();
     bindUi();

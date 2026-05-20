@@ -97,6 +97,7 @@ module.exports = function buildCatalogRoutes(pool) {
 
   function canAccessStore(req, store_id) {
     if (!store_id) return false;
+    const normalizedStoreId = String(store_id).trim().toUpperCase();
 
     const roles = Array.isArray(req.user?.roles) ? req.user.roles : [];
     if (
@@ -111,7 +112,9 @@ module.exports = function buildCatalogRoutes(pool) {
       ? req.user.store_ids
       : [];
 
-    return allowedStores.includes(store_id);
+    return allowedStores.some(
+      (allowedStoreId) => String(allowedStoreId || "").trim().toUpperCase() === normalizedStoreId
+    );
   }
 
   async function loadCatalogRowsByEpcs(storeId, epcs) {

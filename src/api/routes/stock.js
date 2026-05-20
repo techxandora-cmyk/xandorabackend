@@ -67,6 +67,7 @@ module.exports = function buildStockRoutes(pool) {
 
   function canAccessStore(req, store_id) {
     if (!store_id) return false;
+    const normalizedStoreId = String(store_id).trim().toUpperCase();
 
     const roles = Array.isArray(req.user?.roles) ? req.user.roles : [];
     if (
@@ -80,7 +81,9 @@ module.exports = function buildStockRoutes(pool) {
     const allowedStores = Array.isArray(req.user?.store_ids)
       ? req.user.store_ids
       : [];
-    return allowedStores.includes(store_id);
+    return allowedStores.some(
+      (allowedStoreId) => String(allowedStoreId || "").trim().toUpperCase() === normalizedStoreId
+    );
   }
 
   function buildStockStateCtes(whereSql) {
@@ -129,7 +132,7 @@ module.exports = function buildStockRoutes(pool) {
           )::int AS return_events
         FROM pos_transaction_items pti
         JOIN pos_transactions pt ON pt.id = pti.pos_txn_id
-        WHERE pt.store_id = $1
+        WHERE UPPER(pt.store_id) = UPPER($1)
         GROUP BY pti.epc
       )
     `;
@@ -181,7 +184,7 @@ module.exports = function buildStockRoutes(pool) {
           )::int AS return_events
         FROM pos_transaction_items pti
         JOIN pos_transactions pt ON pt.id = pti.pos_txn_id
-        WHERE pt.store_id = $1
+        WHERE UPPER(pt.store_id) = UPPER($1)
         GROUP BY pti.epc
       ),
       scan_last_seen AS (
@@ -189,7 +192,7 @@ module.exports = function buildStockRoutes(pool) {
           s.tag AS epc,
           MAX(s.ts) AS last_scan_at
         FROM scan_items s
-        WHERE s.store_id = $1
+        WHERE UPPER(s.store_id) = UPPER($1)
         GROUP BY s.tag
       ),
       product_rollup AS (
@@ -246,7 +249,7 @@ module.exports = function buildStockRoutes(pool) {
 
       await ensureCatalogTable(pool);
 
-      const where = ["c.store_id = $1"];
+      const where = ["UPPER(c.store_id) = UPPER($1)"];
       const values = [store_id];
       let i = 2;
 
@@ -414,7 +417,7 @@ module.exports = function buildStockRoutes(pool) {
       await ensureCatalogTable(pool);
 
       const ctes = `
-        ${buildStockStateCtes("c.store_id = $1")}
+        ${buildStockStateCtes("UPPER(c.store_id) = UPPER($1)")}
         ,
         catalog_with_key AS (
           SELECT
@@ -517,7 +520,7 @@ module.exports = function buildStockRoutes(pool) {
       const deletedResult = await client.query(
         `
         DELETE FROM catalog_items
-        WHERE store_id = $1
+        WHERE UPPER(store_id) = UPPER($1)
           AND epc = $2
         RETURNING
           store_id,
@@ -622,7 +625,7 @@ module.exports = function buildStockRoutes(pool) {
 
       await ensureCatalogTable(pool);
 
-      const ctes = buildStockInsightsCtes("c.store_id = $1");
+      const ctes = buildStockInsightsCtes("UPPER(c.store_id) = UPPER($1)");
       const rateExpr = returnRateSql("sold_count", "returned_count");
 
       const [topMoversResult, deadStockResult, riskSummaryResult, riskItemsResult, brandRisksResult] =
