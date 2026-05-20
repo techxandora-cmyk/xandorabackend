@@ -396,8 +396,8 @@
 
   function getManualEpc() {
     return (
-      refs.manualEpc.value.trim() ||
-      refs.assignEpc.value.trim()
+      refs.manualEpc?.value.trim() ||
+      refs.assignEpc?.value.trim()
     ).toUpperCase();
   }
 
@@ -427,7 +427,7 @@
         <td>
           <div class="row-actions">
             <button class="btn btn-small action-add" data-epc="${escapeHtml(item.epc)}" type="button">Add to Bill</button>
-            <button class="btn btn-small btn-outline action-remove-live" data-epc="${escapeHtml(item.epc)}" type="button">Remove</button>
+            <button class="btn btn-small btn-outline action-return-live" data-epc="${escapeHtml(item.epc)}" type="button">Return</button>
           </div>
         </td>
       </tr>`;
@@ -1197,16 +1197,18 @@
     }
   }
 
-  async function returnEpc() {
-    const epc = getManualEpc();
+  async function returnEpc(epcValue = "") {
+    const epc = String(epcValue || getManualEpc()).trim().toUpperCase();
     if (!epc) {
-      pushLog("Return blocked: enter or scan an EPC first");
-      refs.manualEpc.focus();
+      pushLog("Return blocked: scan an EPC first");
+      refs.assignEpc?.focus();
       return;
     }
 
-    refs.returnBtn.disabled = true;
-    refs.returnBtn.textContent = "Returning...";
+    if (refs.returnBtn) {
+      refs.returnBtn.disabled = true;
+      refs.returnBtn.textContent = "Returning...";
+    }
     try {
       const result = await apiPost("/api/pos/return", {
         epc,
@@ -1235,14 +1237,18 @@
       refs.checkoutModal.hidden = false;
       refs.checkoutModalPrint.focus();
       if (refs.printBillBtn) refs.printBillBtn.disabled = false;
-      refs.manualEpc.value = "";
+      if (refs.manualEpc) refs.manualEpc.value = "";
+      state.inZone = state.inZone.filter((item) => item.epc !== epc);
+      renderInZone();
       await Promise.all([refreshAssignments(), refreshRecentEpcs()]).catch(() => {});
       pushLog(`Return completed: ${epc}`);
     } catch (err) {
       pushLog(`Return failed: ${err.message}`);
     } finally {
-      refs.returnBtn.disabled = false;
-      refs.returnBtn.textContent = "Return EPC";
+      if (refs.returnBtn) {
+        refs.returnBtn.disabled = false;
+        refs.returnBtn.textContent = "Return EPC";
+      }
     }
   }
 
@@ -1366,7 +1372,9 @@
     if (refs.printBillBtn) {
       refs.printBillBtn.addEventListener("click", printLastReceipt);
     }
-    refs.returnBtn.addEventListener("click", returnEpc);
+    if (refs.returnBtn) {
+      refs.returnBtn.addEventListener("click", () => returnEpc());
+    }
     refs.applyDiscountBtn.addEventListener("click", applyDiscount);
     refs.discountValue.addEventListener("keydown", (evt) => {
       if (evt.key === "Enter") {
@@ -1454,22 +1462,24 @@
     });
     window.addEventListener("focus", syncSharedCatalog);
 
-    refs.manualScanBtn.addEventListener("click", async () => {
-      const epc = getManualEpc();
-      if (!epc) return;
-      try {
-        const result = await apiPost("/api/live/scan", { epc });
-        if (result.item) {
-          state.inZone = upsertByEpc(state.inZone, result.item);
-          renderInZone();
+    if (refs.manualScanBtn) {
+      refs.manualScanBtn.addEventListener("click", async () => {
+        const epc = getManualEpc();
+        if (!epc) return;
+        try {
+          const result = await apiPost("/api/live/scan", { epc });
+          if (result.item) {
+            state.inZone = upsertByEpc(state.inZone, result.item);
+            renderInZone();
+          }
+          if (refs.manualEpc) refs.manualEpc.value = "";
+          pushLog(`Bin scan: ${epc}`);
+          refreshBilling().catch(() => {});
+        } catch (err) {
+          pushLog(`Bin scan failed: ${err.message}`);
         }
-        refs.manualEpc.value = "";
-        pushLog(`Bin scan: ${epc}`);
-        refreshBilling().catch(() => {});
-      } catch (err) {
-        pushLog(`Bin scan failed: ${err.message}`);
-      }
-    });
+      });
+    }
 
     refs.manualStocktakeBtn.addEventListener("click", async () => {
       const epc = getManualEpc();
@@ -1479,7 +1489,7 @@
         if (result.row || result.item) {
           upsertStocktakeRow(result.row || result.item);
         }
-        refs.manualEpc.value = "";
+        if (refs.manualEpc) refs.manualEpc.value = "";
         pushLog(`Inventory intake scan: ${epc}`);
         Promise.all([refreshStocktake(), refreshInventory(), refreshAssignments(), refreshRecentEpcs()]).catch(() => {});
       } catch (err) {
@@ -1498,7 +1508,7 @@
         if (result.item) {
           upsertLaundryRow(result.item);
         }
-        refs.manualEpc.value = "";
+        if (refs.manualEpc) refs.manualEpc.value = "";
         pushLog(`Laundry scan: ${epc}`);
         Promise.all([refreshLaundry(), refreshAssignments(), refreshRecentEpcs()]).catch(() => {});
       } catch (err) {
@@ -1525,7 +1535,7 @@
       try {
         const result = await apiPost("/api/assignments", payload);
         pushLog(`Assigned ${result.item.epc} to ${result.item.name}`);
-        refs.manualEpc.value = result.item.epc;
+        if (refs.manualEpc) refs.manualEpc.value = result.item.epc;
         state.assignments = upsertByEpc(state.assignments, result.item);
         state.inZone = upsertByEpc(state.inZone, {
           ...result.item,
@@ -1566,16 +1576,10 @@
         return;
       }
 
-      const removeBtn = evt.target.closest(".action-remove-live");
-      if (removeBtn) {
-        const epc = removeBtn.getAttribute("data-epc");
-        try {
-          await apiPost("/api/live/remove", { epc });
-          pushLog(`Removed from bin: ${epc}`);
-          await refreshInZone();
-        } catch (err) {
-          pushLog(`Bin remove failed: ${err.message}`);
-        }
+      const returnLiveBtn = evt.target.closest(".action-return-live");
+      if (returnLiveBtn) {
+        const epc = returnLiveBtn.getAttribute("data-epc");
+        await returnEpc(epc);
       }
     });
 
@@ -1633,7 +1637,7 @@
       if (!row) return;
       const epc = row.getAttribute("data-epc");
       const status = row.getAttribute("data-status") || "Received";
-      refs.manualEpc.value = epc;
+      if (refs.manualEpc) refs.manualEpc.value = epc;
       refs.laundryStatus.value = status;
       pushLog(`Loaded laundry EPC for correction: ${epc}`);
     });

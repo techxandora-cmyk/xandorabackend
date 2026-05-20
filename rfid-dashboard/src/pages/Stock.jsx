@@ -119,16 +119,23 @@ export default function Stock() {
       window.clearTimeout(refreshTimer);
       refreshTimer = window.setTimeout(() => {
         loadStock();
-      }, 350);
+      }, 100);
     }
 
     eventSource.addEventListener("catalog_item_upserted", scheduleRefresh);
+    eventSource.addEventListener("catalog_item_deleted", scheduleRefresh);
     eventSource.addEventListener("stock_changed", scheduleRefresh);
     eventSource.addEventListener("pos_sale", scheduleRefresh);
     eventSource.addEventListener("pos_return", scheduleRefresh);
+    const fallbackTimer = window.setInterval(() => {
+      if (document.visibilityState === "visible") {
+        loadStock();
+      }
+    }, 3000);
 
     return () => {
       window.clearTimeout(refreshTimer);
+      window.clearInterval(fallbackTimer);
       eventSource.close();
     };
   }, [loadStock, storeId]);

@@ -592,9 +592,10 @@ function startLiveBridge() {
 
               const epc = normalizeEpc(data.tag || data.epc || "");
               if (!epc) continue;
+              const itemInCart = Boolean(session.state.cartStore.get(epc));
 
               const cachedItem = getCachedAssignment(session, epc);
-              const cachedZoneItem = cachedItem ? toZoneItem(cachedItem) : null;
+              const cachedZoneItem = !itemInCart && cachedItem ? toZoneItem(cachedItem) : null;
               rememberRecentEpc(session.state, epc, {
                 source: eventName === "scan" ? "Live reader" : "Zone heartbeat",
                 assigned: Boolean(cachedItem),
@@ -631,15 +632,16 @@ function startLiveBridge() {
                     item,
                   });
 
-                  if (item) {
+                  if (item && !itemInCart) {
                     getSessionZoneTracker(session).touch(toZoneItem(item), Date.now());
                   }
 
                   if (eventName === "scan") {
+                    const scannedItem = item && !itemInCart ? toZoneItem(item) : null;
                     broadcastToState(session.state, {
                       type: "live.scan",
                       epc,
-                      item: item ? toZoneItem(item) : null,
+                      item: scannedItem,
                       at: Date.now(),
                     });
                   }
@@ -817,7 +819,13 @@ app.get("/api/live/events", requireSession, (req, res) => {
 app.get("/api/live/in-zone", requireSession, requireSelectedStore, (req, res) => {
   const zoneTracker = getSessionZoneTracker(req.retailSession);
   zoneTracker.cleanup(Date.now());
-  const items = zoneTracker.list();
+  const cartEpcs = new Set(
+    req.retailSession.state.cartStore
+      .snapshot()
+      .items.map((item) => normalizeEpc(item.epc))
+      .filter(Boolean)
+  );
+  const items = zoneTracker.list().filter((item) => !cartEpcs.has(normalizeEpc(item.epc)));
   return res.json({ items, count: items.length });
 });
 
@@ -1328,30 +1336,13 @@ app.post("/api/assignments", requireSession, requireSelectedStore, async (req, r
       barcode: String(req.body?.barcode || "").trim() || null,
     };
 
-    let item = null;
-    let persisted = true;
-    try {
-      const body = await authorizedFetch(req.retailSession, "retail", "/api/v1/catalog/upsert-item", {
-        method: "POST",
-        body: JSON.stringify(payload),
-      });
-      item = toAssignmentItem(body?.item || {});
-      if (!body?.ok || !item.epc) {
-        throw new Error("Assignment was not saved to shared catalog");
-      }
-    } catch (err) {
-      persisted = false;
-      item = toAssignmentItem({
-        ...payload,
-        name: payload.product_name,
-        price: payload.price,
-        size: payload.size,
-        laundryStatus: payload.laundryStatus,
-      });
-      if (!item.epc || !item.name) {
-        throw err;
-      }
-      console.warn("[retail-console] Saved assignment locally only:", err.message);
+    const body = await authorizedFetch(req.retailSession, "retail", "/api/v1/catalog/upsert-item", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    const item = toAssignmentItem(body?.item || {});
+    if (!body?.ok || !item.epc) {
+      throw new Error("Assignment was not saved to shared catalog");
     }
 
     if (item.epc) {
@@ -1372,7 +1363,7 @@ app.post("/api/assignments", requireSession, requireSelectedStore, async (req, r
       at: Date.now(),
     });
 
-    return res.json({ ok: true, item, persisted });
+    return res.json({ ok: true, item, persisted: true });
   } catch (err) {
     return res.status(500).json({ ok: false, error: err.message });
   }
