@@ -117,13 +117,41 @@
             <h2>POS Cart</h2>
             <div class="inline-actions">
               <button id="checkout-btn" class="btn" type="button">Checkout / Payment</button>
+              <button id="print-bill-btn" class="btn btn-outline" type="button" disabled>Print Bill</button>
+              <button id="return-btn" class="btn btn-outline" type="button">Return EPC</button>
               <button id="clear-cart-btn" class="btn btn-outline" type="button">Clear Cart</button>
             </div>
+          </div>
+          <div class="pos-controls">
+            <label class="toolbar-label">
+              Discount
+              <select id="discount-type" class="text-input compact-input">
+                <option value="amount">Amount</option>
+                <option value="percent">Percent</option>
+              </select>
+            </label>
+            <label class="toolbar-label">
+              Value
+              <input id="discount-value" class="text-input compact-input" type="number" min="0" step="0.01" value="0" />
+            </label>
+            <button id="apply-discount-btn" class="btn btn-outline" type="button">Apply Discount</button>
+            <label class="toolbar-label return-reason-field">
+              Return Reason
+              <input id="return-reason" class="text-input" placeholder="Customer return" />
+            </label>
           </div>
           <div class="metrics-row">
             <div class="metric">
               <span>Items</span>
               <strong id="metric-cart-count">0</strong>
+            </div>
+            <div class="metric">
+              <span>Subtotal</span>
+              <strong id="metric-cart-subtotal">LKR 0.00</strong>
+            </div>
+            <div class="metric">
+              <span>Discount</span>
+              <strong id="metric-cart-discount">LKR 0.00</strong>
             </div>
             <div class="metric">
               <span>Total</span>
@@ -412,11 +440,17 @@
           <div class="payment-summary">
             <span>Items</span>
             <strong id="checkout-modal-count">0</strong>
+            <span>Subtotal</span>
+            <strong id="checkout-modal-subtotal">LKR 0.00</strong>
+            <span>Discount</span>
+            <strong id="checkout-modal-discount">LKR 0.00</strong>
             <span>Total</span>
             <strong id="checkout-modal-total">LKR 0.00</strong>
           </div>
+          <div id="receipt-print-area" class="receipt-print-area" aria-hidden="true"></div>
         </div>
         <div class="modal-actions">
+          <button id="checkout-modal-print" class="btn btn-outline" type="button">Print Bill</button>
           <button id="checkout-modal-done" class="btn" type="button">Return to Billing</button>
         </div>
       </div>

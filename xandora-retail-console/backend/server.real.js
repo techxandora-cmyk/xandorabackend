@@ -19,7 +19,7 @@ const MAIN_API_URL = String(
 const RETAIL_DEVICE_ID = String(
   process.env.RETAIL_DEVICE_ID || "RETAIL_CONSOLE_01"
 ).trim();
-const IN_ZONE_TIMEOUT_MS = Number(process.env.DEMO_IN_ZONE_TIMEOUT_MS || 1500);
+const IN_ZONE_TIMEOUT_MS = Number(process.env.DEMO_IN_ZONE_TIMEOUT_MS || 900);
 const RECENT_EPC_TTL_MS = 10 * 60 * 1000;
 const SESSION_IDLE_MS = Math.max(
   Number(process.env.RETAIL_SESSION_IDLE_MS || 12 * 60 * 60 * 1000),
@@ -288,14 +288,15 @@ function toAssignmentItem(item = {}) {
     epc: item.epc,
     sku: item.sku || "",
     name: item.product_name || item.name || "",
+    brand: item.brand || "",
     category: item.category || "",
     bin: item.bin || "",
-    size: item.size_label || "",
+    size: item.size_label || item.size || "",
     color: item.color || "",
-    price: Number(item.price_lkr || 0),
-    currency: "LKR",
+    price: Number(item.price_lkr ?? item.price ?? 0),
+    currency: item.currency || "LKR",
     stock: item.stock != null ? Number(item.stock) : 1,
-    laundryStatus: item.laundry_status || "",
+    laundryStatus: item.laundry_status || item.laundryStatus || "",
     notes: item.notes || "",
     barcode: item.barcode || "",
   };
@@ -306,6 +307,7 @@ function toZoneItem(item = {}) {
     epc: item.epc,
     sku: item.sku || "",
     name: item.name || "",
+    brand: item.brand || "",
     category: item.category || "",
     bin: item.bin || "",
     size: item.size || "",
@@ -325,7 +327,10 @@ async function fetchCatalog(session, limit = 1000) {
 }
 
 async function fetchAssignments(session, limit = 1000) {
-  const catalogItems = await fetchCatalog(session, limit);
+  const catalogItems = await fetchCatalog(session, limit).catch((err) => {
+    console.warn("[retail-console] Falling back to local assignments:", err.message);
+    return [];
+  });
   const byEpc = new Map();
 
   for (const item of assignmentStore.list(session.selectedStoreId)) {
@@ -865,6 +870,10 @@ app.post("/api/pos/cart/clear", requireSession, (_req, res) =>
   res.json(_req.retailSession.state.cartStore.clear())
 );
 
+app.post("/api/pos/cart/discount", requireSession, (req, res) =>
+  res.json(req.retailSession.state.cartStore.setDiscount(req.body || {}))
+);
+
 app.post("/api/pos/cart/checkout", requireSession, requireSelectedStore, async (req, res) => {
   try {
     const cart = req.retailSession.state.cartStore.snapshot();
@@ -887,6 +896,10 @@ app.post("/api/pos/cart/checkout", requireSession, requireSelectedStore, async (
           source: "xandora-retail-console",
           txn_type: "SALE",
           cart_count: cart.count,
+          subtotal_amount: cart.subtotal,
+          discount_type: cart.discount?.type || "amount",
+          discount_value: Number(cart.discount?.value || 0),
+          discount_amount: Number(cart.discount?.amount || 0),
         },
       }),
     });
@@ -897,6 +910,8 @@ app.post("/api/pos/cart/checkout", requireSession, requireSelectedStore, async (
       store_id: req.retailSession.selectedStoreId,
       ext_id: extId,
       total_amount: cart.total,
+      subtotal_amount: cart.subtotal,
+      discount: cart.discount,
       items_count: cart.count,
       transaction: result?.transaction || null,
       at: Date.now(),
@@ -908,6 +923,8 @@ app.post("/api/pos/cart/checkout", requireSession, requireSelectedStore, async (
       transaction: result?.transaction || null,
       items_count: cart.count,
       total_amount: cart.total,
+      subtotal_amount: cart.subtotal,
+      discount: cart.discount,
       cleared_cart: cleared,
     });
   } catch (err) {
@@ -915,6 +932,61 @@ app.post("/api/pos/cart/checkout", requireSession, requireSelectedStore, async (
     return res.status(err.status || 500).json({
       ok: false,
       error: err.message || "Checkout failed",
+    });
+  }
+});
+
+app.post("/api/pos/return", requireSession, requireSelectedStore, async (req, res) => {
+  try {
+    const epc = normalizeEpc(req.body?.epc);
+    if (!epc) {
+      return res.status(400).json({ ok: false, error: "epc is required" });
+    }
+
+    const item = await lookupCatalogItem(req.retailSession, epc, { forceRemote: true });
+    const price = Number(req.body?.amount ?? item?.price ?? 0);
+    const extId = `retail-return-${req.retailSession.selectedStoreId}-${Date.now()}`;
+    const result = await authorizedFetch(req.retailSession, "retail", "/api/v1/pos/return", {
+      method: "POST",
+      body: JSON.stringify({
+        ext_id: extId,
+        store_id: req.retailSession.selectedStoreId,
+        total_amount: price,
+        reason: String(req.body?.reason || "").trim() || "Customer return",
+        items: [{ epc, price }],
+        metadata: {
+          source: "xandora-retail-console",
+          txn_type: "RETURN",
+          operator_email: req.retailSession.user?.email || null,
+        },
+      }),
+    });
+
+    const returnedItem = item ? toZoneItem(item) : { epc, price, currency: "LKR" };
+    broadcastToState(req.retailSession.state, {
+      type: "pos.return.completed",
+      store_id: req.retailSession.selectedStoreId,
+      ext_id: extId,
+      epc,
+      item: returnedItem,
+      total_amount: -Math.abs(price),
+      transaction: result?.transaction || null,
+      at: Date.now(),
+    });
+
+    return res.json({
+      ok: true,
+      ext_id: extId,
+      transaction: result?.transaction || null,
+      item: returnedItem,
+      items_count: result?.items_count || 1,
+      total_amount: -Math.abs(price),
+    });
+  } catch (err) {
+    console.error("[retail-console] POS return failed:", err);
+    return res.status(err.status || 500).json({
+      ok: false,
+      error: err.message || "Return failed",
     });
   }
 });
@@ -1163,12 +1235,15 @@ app.get("/api/assignments", requireSession, requireSelectedStore, async (req, re
 
 app.get("/api/assignments/recent-epcs", requireSession, requireSelectedStore, async (req, res) => {
   try {
-    const items = [];
+    const byEpc = new Map();
     const state = req.retailSession.state;
 
+    state.zoneTracker.cleanup(Date.now());
     for (const liveItem of state.zoneTracker.list()) {
       const assignedItem = getCachedAssignment(req.retailSession, liveItem.epc);
-      items.push({
+      const epc = normalizeEpc(liveItem.epc);
+      if (!epc) continue;
+      byEpc.set(epc, {
         epc: liveItem.epc,
         source: "Bin live zone",
         seenAt: liveItem.lastSeenAt,
@@ -1178,19 +1253,25 @@ app.get("/api/assignments/recent-epcs", requireSession, requireSelectedStore, as
       });
     }
 
-    for (const row of state.recentLiveEpcs.values()) {
-      if (items.some((item) => item.epc === row.epc)) continue;
+    const cutoff = Date.now() - RECENT_EPC_TTL_MS;
+    for (const [epc, row] of state.recentLiveEpcs) {
+      if (Number(row.seenAt || 0) < cutoff) {
+        state.recentLiveEpcs.delete(epc);
+        continue;
+      }
+      if (byEpc.has(epc)) continue;
       const assignedItem = getCachedAssignment(req.retailSession, row.epc);
-      items.push({
+      byEpc.set(epc, {
         epc: row.epc,
         source: row.source || "Live reader",
         seenAt: row.seenAt,
-        seenAtIso: new Date(row.seenAt).toISOString(),
+        seenAtIso: new Date(row.seenAt || Date.now()).toISOString(),
         item: assignedItem || row.item || null,
         assigned: Boolean(assignedItem || row.assigned || row.item),
       });
     }
 
+    const items = [...byEpc.values()];
     await Promise.all(
       items
         .filter((row) => !row.assigned)
@@ -1232,17 +1313,30 @@ app.post("/api/assignments", requireSession, requireSelectedStore, async (req, r
       barcode: String(req.body?.barcode || "").trim() || null,
     };
 
-    const body = await authorizedFetch(req.retailSession, "retail", "/api/v1/catalog/upsert-item", {
-      method: "POST",
-      body: JSON.stringify(payload),
-    });
-
-    const item = toAssignmentItem(body?.item || {});
-    if (!body?.ok || !item.epc) {
-      return res.status(500).json({
-        ok: false,
-        error: "Assignment was not saved to shared catalog",
+    let item = null;
+    let persisted = true;
+    try {
+      const body = await authorizedFetch(req.retailSession, "retail", "/api/v1/catalog/upsert-item", {
+        method: "POST",
+        body: JSON.stringify(payload),
       });
+      item = toAssignmentItem(body?.item || {});
+      if (!body?.ok || !item.epc) {
+        throw new Error("Assignment was not saved to shared catalog");
+      }
+    } catch (err) {
+      persisted = false;
+      item = toAssignmentItem({
+        ...payload,
+        name: payload.product_name,
+        price: payload.price,
+        size: payload.size,
+        laundryStatus: payload.laundryStatus,
+      });
+      if (!item.epc || !item.name) {
+        throw err;
+      }
+      console.warn("[retail-console] Saved assignment locally only:", err.message);
     }
 
     if (item.epc) {
@@ -1262,7 +1356,7 @@ app.post("/api/assignments", requireSession, requireSelectedStore, async (req, r
       at: Date.now(),
     });
 
-    return res.json({ ok: true, item, persisted: true });
+    return res.json({ ok: true, item, persisted });
   } catch (err) {
     return res.status(500).json({ ok: false, error: err.message });
   }

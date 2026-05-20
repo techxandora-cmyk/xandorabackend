@@ -10,7 +10,7 @@ const { LiveBridge } = require("./services/liveBridge");
 
 const PORT = Number(process.env.PORT || 4300);
 const HOST = process.env.HOST || "0.0.0.0";
-const IN_ZONE_TIMEOUT_MS = Number(process.env.DEMO_IN_ZONE_TIMEOUT_MS || 10000);
+const IN_ZONE_TIMEOUT_MS = Number(process.env.DEMO_IN_ZONE_TIMEOUT_MS || 900);
 const CLEANUP_INTERVAL_MS = Number(process.env.DEMO_CLEANUP_INTERVAL_MS || 1000);
 const SIM_INTERVAL_MS = Number(process.env.DEMO_SIM_INTERVAL_MS || 1400);
 const MAIN_API_URL = String(process.env.MAIN_API_URL || "").trim();
@@ -480,6 +480,7 @@ app.get("/api/assignments", (_req, res) => {
 });
 
 app.get("/api/assignments/recent-epcs", (_req, res) => {
+  zoneTracker.cleanup(Date.now());
   const liveRows = [
     ...zoneTracker.list().map((item) => ({
       epc: item.epc,
@@ -490,13 +491,13 @@ app.get("/api/assignments/recent-epcs", (_req, res) => {
       item: dataStore.resolveByEpc(item.epc),
     })),
     ...[...recentLiveEpcs.values()]
-      .filter((r) => !zoneTracker.list().some((z) => z.epc === r.epc))
-      .map((r) => ({
-        epc: r.epc,
-        source: "Live reader",
-        seenAt: r.seenAt,
-        assigned: dataStore.isAssigned(r.epc),
-        item: dataStore.resolveByEpc(r.epc),
+      .filter((row) => !zoneTracker.list().some((item) => item.epc === row.epc))
+      .map((row) => ({
+        epc: row.epc,
+        source: row.source || "Live reader",
+        seenAt: row.seenAt,
+        assigned: dataStore.isAssigned(row.epc),
+        item: dataStore.resolveByEpc(row.epc),
       })),
   ];
 
@@ -709,6 +710,10 @@ app.post("/api/pos/cart/clear", (_req, res) => {
   return res.json(cartStore.clear());
 });
 
+app.post("/api/pos/cart/discount", (req, res) => {
+  return res.json(cartStore.setDiscount(req.body || {}));
+});
+
 app.post("/api/pos/cart/checkout", (_req, res) => {
   const cart = cartStore.snapshot();
   if (!cart.items.length) {
@@ -720,6 +725,8 @@ app.post("/api/pos/cart/checkout", (_req, res) => {
     type: "pos.checkout.completed",
     ext_id: `demo-retail-console-${Date.now()}`,
     total_amount: cart.total,
+    subtotal_amount: cart.subtotal,
+    discount: cart.discount,
     items_count: cart.count,
     at: Date.now(),
   });
@@ -729,7 +736,41 @@ app.post("/api/pos/cart/checkout", (_req, res) => {
     demo: true,
     items_count: cart.count,
     total_amount: cart.total,
+    subtotal_amount: cart.subtotal,
+    discount: cart.discount,
     cleared_cart: cleared,
+  });
+});
+
+app.post("/api/pos/return", (req, res) => {
+  const epc = normalizeEpc(req.body?.epc);
+  if (!epc) {
+    return res.status(400).json({ ok: false, error: "epc is required" });
+  }
+
+  const item = dataStore.resolveByEpc(epc);
+  if (!item) {
+    return res.status(404).json({ ok: false, error: `Unknown EPC: ${epc}` });
+  }
+
+  const price = Number(req.body?.amount ?? item.price ?? 0);
+  const extId = `demo-retail-return-${Date.now()}`;
+  broadcast({
+    type: "pos.return.completed",
+    ext_id: extId,
+    epc,
+    total_amount: -Math.abs(price),
+    items_count: 1,
+    at: Date.now(),
+  });
+
+  return res.json({
+    ok: true,
+    demo: true,
+    ext_id: extId,
+    item,
+    items_count: 1,
+    total_amount: -Math.abs(price),
   });
 });
 

@@ -437,9 +437,21 @@ html[data-theme="light"] .btn-danger {
 
 .metrics-row {
   display: grid;
-  grid-template-columns: repeat(2, minmax(160px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: 10px;
   margin-bottom: 10px;
+}
+
+.pos-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 10px;
+  margin: 0 0 14px;
+}
+
+.return-reason-field {
+  flex: 1 1 220px;
 }
 
 .metric {
@@ -729,9 +741,107 @@ th {
 
 .modal-actions {
   display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
   justify-content: flex-end;
   padding: 14px 16px 16px;
   border-top: 1px solid rgba(65, 142, 218, 0.16);
+}
+
+.receipt-print-area {
+  display: none;
+}
+
+.receipt-paper {
+  color: #111111;
+  font-family: Arial, sans-serif;
+  font-size: 11px;
+  line-height: 1.28;
+}
+
+.receipt-paper h1 {
+  margin: 0 0 4px;
+  text-align: center;
+  font-size: 18px;
+  letter-spacing: 0;
+}
+
+.receipt-type {
+  text-align: center;
+  font-weight: 700;
+}
+
+.receipt-paper p {
+  margin: 2px 0;
+}
+
+.receipt-paper hr {
+  border: 0;
+  border-top: 1px dashed #111111;
+  margin: 8px 0;
+}
+
+.receipt-paper table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.receipt-paper th,
+.receipt-paper td {
+  padding: 3px 0;
+  text-align: left;
+  vertical-align: top;
+}
+
+.receipt-paper th:last-child,
+.receipt-paper td:last-child {
+  text-align: right;
+}
+
+.receipt-paper td span {
+  display: block;
+  font-size: 9px;
+}
+
+.receipt-totals {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 3px 10px;
+  font-size: 12px;
+}
+
+.receipt-footer {
+  text-align: center;
+}
+
+@media print {
+  @page {
+    size: 80mm 200mm;
+    margin: 4mm;
+  }
+
+  html,
+  body {
+    min-height: auto;
+    background: #ffffff !important;
+  }
+
+  body * {
+    visibility: hidden !important;
+  }
+
+  .receipt-print-area,
+  .receipt-print-area * {
+    visibility: visible !important;
+  }
+
+  .receipt-print-area {
+    display: block;
+    position: absolute;
+    inset: 0 auto auto 0;
+    width: 72mm;
+    padding: 0;
+  }
 }
 
 .auth-backdrop {

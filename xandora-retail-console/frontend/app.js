@@ -3,7 +3,7 @@
   const SESSION_STORAGE_KEY = "xandora_retail_console_session";
   const REMEMBERED_EMAIL_KEY = "xandora_retail_console_email";
   const THEME_STORAGE_KEY = "xandora_retail_console_theme";
-  const LIVE_BIN_MAX_AGE_SEC = 10;
+  const LIVE_BIN_MAX_AGE_SEC = 1.5;
 
   const state = {
     activeView: "billing",
@@ -15,6 +15,7 @@
     pendingStores: [],
     authMode: "login",
     cart: { items: [], count: 0, total: 0, currency: "LKR" },
+    lastReceipt: null,
     inZone: [],
     inventory: [],
     stocktake: { items: [], summary: { uniqueEpcs: 0, totalScanEvents: 0 } },
@@ -62,6 +63,8 @@
     recentAssignedList: $("recent-assigned-list"),
     recentEpcsBody: $("recent-epcs-body"),
     metricCartCount: $("metric-cart-count"),
+    metricCartSubtotal: $("metric-cart-subtotal"),
+    metricCartDiscount: $("metric-cart-discount"),
     metricCartTotal: $("metric-cart-total"),
     metricStocktakeUnique: $("metric-stocktake-unique"),
     metricStocktakeTotal: $("metric-stocktake-total"),
@@ -75,7 +78,13 @@
     laundryFilter: $("laundry-filter"),
     refreshBtn: $("refresh-btn"),
     checkoutBtn: $("checkout-btn"),
+    printBillBtn: $("print-bill-btn"),
+    returnBtn: $("return-btn"),
     clearCartBtn: $("clear-cart-btn"),
+    discountType: $("discount-type"),
+    discountValue: $("discount-value"),
+    applyDiscountBtn: $("apply-discount-btn"),
+    returnReason: $("return-reason"),
     clearStocktakeBtn: $("clear-stocktake-btn"),
     clearLaundryBtn: $("clear-laundry-btn"),
     closeDemoBtn: $("close-demo-btn"),
@@ -96,9 +105,13 @@
     checkoutModal: $("checkout-modal"),
     checkoutModalClose: $("checkout-modal-close"),
     checkoutModalDone: $("checkout-modal-done"),
+    checkoutModalPrint: $("checkout-modal-print"),
     checkoutModalCount: $("checkout-modal-count"),
+    checkoutModalSubtotal: $("checkout-modal-subtotal"),
+    checkoutModalDiscount: $("checkout-modal-discount"),
     checkoutModalTotal: $("checkout-modal-total"),
     checkoutModalCopy: $("checkout-modal-copy"),
+    receiptPrintArea: $("receipt-print-area"),
     eventLog: $("event-log"),
     authModal: $("auth-modal"),
     authMessage: $("auth-message"),
@@ -411,8 +424,18 @@
   }
 
   function renderCart() {
+    const currency = state.cart.currency || "LKR";
     refs.metricCartCount.textContent = String(state.cart.count || 0);
-    refs.metricCartTotal.textContent = formatMoney(state.cart.total, state.cart.currency || "LKR");
+    refs.metricCartSubtotal.textContent = formatMoney(state.cart.subtotal ?? state.cart.total, currency);
+    refs.metricCartDiscount.textContent = formatMoney(state.cart.discount?.amount || 0, currency);
+    refs.metricCartTotal.textContent = formatMoney(state.cart.total, currency);
+    if (refs.discountType) refs.discountType.value = state.cart.discount?.type || "amount";
+    if (refs.discountValue && document.activeElement !== refs.discountValue) {
+      refs.discountValue.value = String(state.cart.discount?.value || 0);
+    }
+    if (refs.printBillBtn) {
+      refs.printBillBtn.disabled = !state.lastReceipt;
+    }
 
     if (!state.cart.items.length) {
       refs.cartBody.innerHTML = `<tr><td colspan="6" class="empty-row">Cart is empty</td></tr>`;
@@ -514,6 +537,110 @@
       </tr>`
       )
       .join("");
+  }
+
+  function buildReceiptSnapshot(result, cart) {
+    const now = new Date();
+    return {
+      receiptNo: result.ext_id || result.transaction?.ext_id || `xandora-${now.getTime()}`,
+      type: result.receipt_type || (Number(result.total_amount || 0) < 0 ? "RETURN" : "SALE"),
+      store: state.session?.selected_store_id || "Xandora Store",
+      cashier: state.session?.email || state.rememberedEmail || "",
+      issuedAt: now,
+      currency: cart.currency || "LKR",
+      count: result.items_count || cart.count || 0,
+      total: Number(result.total_amount ?? cart.total ?? 0),
+      subtotal: Number(result.subtotal_amount ?? cart.subtotal ?? cart.total ?? 0),
+      discount: result.discount || cart.discount || { type: "amount", value: 0, amount: 0 },
+      items: Array.isArray(cart.items) ? cart.items.map((item) => ({ ...item })) : [],
+    };
+  }
+
+  function renderReceipt(receipt) {
+    if (!refs.receiptPrintArea || !receipt) return;
+
+    const items = receipt.items.length
+      ? receipt.items
+          .map(
+            (item, index) => `
+              <tr>
+                <td>${index + 1}</td>
+                <td>
+                  <strong>${escapeHtml(item.name || item.product || "Item")}</strong>
+                  <span>${escapeHtml(
+                    [
+                      item.brand ? `Brand: ${item.brand}` : "",
+                      item.size ? `Size: ${item.size}` : "",
+                      item.color ? `Color: ${item.color}` : "",
+                    ]
+                      .filter(Boolean)
+                      .join(" | ")
+                  )}</span>
+                  <span>${escapeHtml(item.sku || item.epc || "")}</span>
+                </td>
+                <td>${formatMoney(item.price, receipt.currency)}</td>
+              </tr>
+            `
+          )
+          .join("")
+      : `<tr><td colspan="3">No item detail available</td></tr>`;
+
+    refs.receiptPrintArea.innerHTML = `
+      <section class="receipt-paper">
+        <h1>Xandora</h1>
+        <p class="receipt-type">${escapeHtml(receipt.type || "SALE")}</p>
+        <p>${escapeHtml(receipt.store)}</p>
+        <p>${escapeHtml(receipt.issuedAt.toLocaleString())}</p>
+        <p>Bill: ${escapeHtml(receipt.receiptNo)}</p>
+        ${receipt.cashier ? `<p>Cashier: ${escapeHtml(receipt.cashier)}</p>` : ""}
+        <hr />
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Item</th>
+              <th>Total</th>
+            </tr>
+          </thead>
+          <tbody>${items}</tbody>
+        </table>
+        <hr />
+        <div class="receipt-totals">
+          <span>Items</span>
+          <strong>${receipt.count}</strong>
+          <span>Subtotal</span>
+          <strong>${formatMoney(receipt.subtotal, receipt.currency)}</strong>
+          <span>Discount</span>
+          <strong>${formatMoney(receipt.discount?.amount || 0, receipt.currency)}</strong>
+          <span>Total</span>
+          <strong>${formatMoney(receipt.total, receipt.currency)}</strong>
+        </div>
+        <p class="receipt-footer">Thank you</p>
+      </section>
+    `;
+  }
+
+  async function printLastReceipt() {
+    if (!state.lastReceipt) {
+      pushLog("Print blocked: no completed bill is ready");
+      return;
+    }
+    renderReceipt(state.lastReceipt);
+    try {
+      const res = await fetch("http://127.0.0.1:4315/print-receipt", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ receipt: state.lastReceipt }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || `Print bridge failed (${res.status})`);
+      }
+      pushLog(`Receipt sent to POS printer: ${state.lastReceipt.receiptNo}`);
+    } catch (err) {
+      pushLog(`Print bridge unavailable, opening browser print: ${err.message}`);
+      window.print();
+    }
   }
 
   function asInZoneItem(item = {}) {
@@ -878,7 +1005,7 @@
           setBridgeBadge(false);
           pushLog("Live reader disconnected, reconnecting...");
         }
-        if (
+      if (
           type.startsWith("live.") ||
           type.startsWith("pos.") ||
           type.startsWith("inventory.") ||
@@ -1004,16 +1131,31 @@
     refs.checkoutBtn.disabled = true;
     refs.checkoutBtn.textContent = "Processing...";
     try {
+      const checkoutCartSnapshot = {
+        ...state.cart,
+        items: Array.isArray(state.cart.items) ? state.cart.items.map((item) => ({ ...item })) : [],
+      };
       const result = await apiPost("/api/pos/cart/checkout");
+      state.lastReceipt = buildReceiptSnapshot(result, checkoutCartSnapshot);
+      renderReceipt(state.lastReceipt);
       refs.checkoutModalCount.textContent = String(result.items_count || 0);
+      refs.checkoutModalSubtotal.textContent = formatMoney(
+        result.subtotal_amount ?? checkoutCartSnapshot.subtotal ?? checkoutCartSnapshot.total,
+        checkoutCartSnapshot.currency || "LKR"
+      );
+      refs.checkoutModalDiscount.textContent = formatMoney(
+        result.discount?.amount ?? checkoutCartSnapshot.discount?.amount ?? 0,
+        checkoutCartSnapshot.currency || "LKR"
+      );
       refs.checkoutModalTotal.textContent = formatMoney(
         result.total_amount,
-        state.cart.currency || "LKR"
+        checkoutCartSnapshot.currency || "LKR"
       );
       refs.checkoutModalCopy.textContent =
-        "Sale recorded in Xandora. The web dashboard will update from this checkout.";
+        "Sale recorded in Xandora. Print the bill for the customer, then return to billing.";
       refs.checkoutModal.hidden = false;
-      refs.checkoutModalDone.focus();
+      refs.checkoutModalPrint.focus();
+      if (refs.printBillBtn) refs.printBillBtn.disabled = false;
       state.cart = result.cleared_cart || { items: [], count: 0, total: 0, currency: "LKR" };
       renderCart();
       await Promise.all([refreshInventory(), refreshRecentEpcs()]).catch(() => {});
@@ -1023,6 +1165,68 @@
     } finally {
       refs.checkoutBtn.disabled = false;
       refs.checkoutBtn.textContent = "Checkout / Payment";
+    }
+  }
+
+  async function applyDiscount() {
+    try {
+      state.cart = await apiPost("/api/pos/cart/discount", {
+        type: refs.discountType.value,
+        value: refs.discountValue.value,
+      });
+      renderCart();
+      pushLog(`Discount applied: ${state.cart.discount?.type || "amount"} ${state.cart.discount?.value || 0}`);
+    } catch (err) {
+      pushLog(`Discount failed: ${err.message}`);
+    }
+  }
+
+  async function returnEpc() {
+    const epc = getManualEpc();
+    if (!epc) {
+      pushLog("Return blocked: enter or scan an EPC first");
+      refs.manualEpc.focus();
+      return;
+    }
+
+    refs.returnBtn.disabled = true;
+    refs.returnBtn.textContent = "Returning...";
+    try {
+      const result = await apiPost("/api/pos/return", {
+        epc,
+        reason: refs.returnReason.value || "Customer return",
+      });
+      const item = result.item || { epc, price: Math.abs(Number(result.total_amount || 0)) };
+      const returnCart = {
+        items: [item],
+        count: result.items_count || 1,
+        subtotal: Math.abs(Number(result.total_amount || item.price || 0)),
+        total: Number(result.total_amount || 0),
+        currency: item.currency || "LKR",
+        discount: { type: "amount", value: 0, amount: 0 },
+      };
+      state.lastReceipt = buildReceiptSnapshot(
+        { ...result, receipt_type: "RETURN", subtotal_amount: returnCart.subtotal },
+        returnCart
+      );
+      renderReceipt(state.lastReceipt);
+      refs.checkoutModalCount.textContent = String(result.items_count || 1);
+      refs.checkoutModalSubtotal.textContent = formatMoney(returnCart.subtotal, returnCart.currency);
+      refs.checkoutModalDiscount.textContent = formatMoney(0, returnCart.currency);
+      refs.checkoutModalTotal.textContent = formatMoney(result.total_amount, returnCart.currency);
+      refs.checkoutModalCopy.textContent =
+        "Return recorded in Xandora. Print the return bill for the customer, then return to billing.";
+      refs.checkoutModal.hidden = false;
+      refs.checkoutModalPrint.focus();
+      if (refs.printBillBtn) refs.printBillBtn.disabled = false;
+      refs.manualEpc.value = "";
+      await Promise.all([refreshInventory(), refreshAssignments(), refreshRecentEpcs()]).catch(() => {});
+      pushLog(`Return completed: ${epc}`);
+    } catch (err) {
+      pushLog(`Return failed: ${err.message}`);
+    } finally {
+      refs.returnBtn.disabled = false;
+      refs.returnBtn.textContent = "Return EPC";
     }
   }
 
@@ -1136,8 +1340,18 @@
     refs.refreshBtn.addEventListener("click", () => refreshActiveView());
     refs.laundryFilter.addEventListener("change", renderLaundry);
     refs.checkoutBtn.addEventListener("click", checkoutCart);
+    refs.printBillBtn.addEventListener("click", printLastReceipt);
+    refs.returnBtn.addEventListener("click", returnEpc);
+    refs.applyDiscountBtn.addEventListener("click", applyDiscount);
+    refs.discountValue.addEventListener("keydown", (evt) => {
+      if (evt.key === "Enter") {
+        evt.preventDefault();
+        applyDiscount();
+      }
+    });
     refs.checkoutModalClose.addEventListener("click", closeCheckoutModal);
     refs.checkoutModalDone.addEventListener("click", closeCheckoutModal);
+    refs.checkoutModalPrint.addEventListener("click", printLastReceipt);
     refs.checkoutModal.addEventListener("click", (evt) => {
       if (evt.target === refs.checkoutModal) closeCheckoutModal();
     });

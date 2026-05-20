@@ -132,6 +132,12 @@ module.exports = function buildPosRoutes(pool) {
       return next();
     }
 
+    const requestStoreId =
+      req.body?.store_id || req.query?.store_id || req.params?.store_id || null;
+    if (req.user && canAccessStore(req, String(requestStoreId || ""))) {
+      return next();
+    }
+
     // Allow POS system via key
     const key =
       req.headers["x-pos-key"] ||
