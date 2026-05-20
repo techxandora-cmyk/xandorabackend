@@ -416,17 +416,23 @@
       .map(
         (item) => {
           const ageSec = getLiveAgeSec(item);
+          const returnOnly = Boolean(item.returnOnly || item.saleStatus === "SOLD");
+          const productName = returnOnly ? `${item.name || "Item"} (sold)` : item.name;
           return `
       <tr>
         <td class="mono">${escapeHtml(item.epc)}</td>
-        <td>${escapeHtml(item.name)}</td>
+        <td>${escapeHtml(productName)}</td>
         <td>${escapeHtml(item.category)}</td>
         <td>${escapeHtml(item.bin || "-")}</td>
         <td>${formatMoney(item.price, item.currency)}</td>
         <td>${formatAge(ageSec)}</td>
         <td>
           <div class="row-actions">
-            <button class="btn btn-small action-add" data-epc="${escapeHtml(item.epc)}" type="button">Add to Bill</button>
+            ${
+              returnOnly
+                ? ""
+                : `<button class="btn btn-small action-add" data-epc="${escapeHtml(item.epc)}" type="button">Add to Bill</button>`
+            }
             <button class="btn btn-small btn-outline action-return-live" data-epc="${escapeHtml(item.epc)}" type="button">Return</button>
           </div>
         </td>

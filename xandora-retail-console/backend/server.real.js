@@ -27,6 +27,7 @@ const SESSION_IDLE_MS = Math.max(
 );
 const sharedAssignmentsByStore = new Map();
 const sharedZonesByStore = new Map();
+const sharedSoldEpcsByStore = new Map();
 const assignmentStore = new AssignmentStore();
 
 if (!MAIN_API_URL) {
@@ -154,6 +155,28 @@ function getSharedZoneTracker(storeId) {
     sharedZonesByStore.set(key, zoneTracker);
   }
   return sharedZonesByStore.get(key);
+}
+
+function getSoldEpcs(storeId) {
+  const key = normalizeStoreId(storeId);
+  if (!sharedSoldEpcsByStore.has(key)) {
+    sharedSoldEpcsByStore.set(key, new Set());
+  }
+  return sharedSoldEpcsByStore.get(key);
+}
+
+function markSoldEpc(storeId, epc) {
+  const normalized = normalizeEpc(epc);
+  if (normalized) getSoldEpcs(storeId).add(normalized);
+}
+
+function clearSoldEpc(storeId, epc) {
+  const normalized = normalizeEpc(epc);
+  if (normalized) getSoldEpcs(storeId).delete(normalized);
+}
+
+function isSoldEpc(storeId, epc) {
+  return getSoldEpcs(storeId).has(normalizeEpc(epc));
 }
 
 function getSessionZoneTracker(session) {
@@ -326,6 +349,16 @@ function toZoneItem(item = {}) {
     color: item.color || "",
     price: Number(item.price || 0),
     currency: item.currency || "LKR",
+    saleStatus: item.saleStatus || "",
+    returnOnly: Boolean(item.returnOnly),
+  };
+}
+
+function toReturnableZoneItem(item = {}, epc = "") {
+  return {
+    ...toZoneItem({ ...item, epc: item.epc || epc }),
+    saleStatus: "SOLD",
+    returnOnly: true,
   };
 }
 
@@ -593,9 +626,14 @@ function startLiveBridge() {
               const epc = normalizeEpc(data.tag || data.epc || "");
               if (!epc) continue;
               const itemInCart = Boolean(session.state.cartStore.get(epc));
+              const itemSold = isSoldEpc(session.selectedStoreId, epc);
 
               const cachedItem = getCachedAssignment(session, epc);
-              const cachedZoneItem = !itemInCart && cachedItem ? toZoneItem(cachedItem) : null;
+              const cachedZoneItem = !itemInCart && cachedItem
+                ? itemSold
+                  ? toReturnableZoneItem(cachedItem, epc)
+                  : toZoneItem(cachedItem)
+                : null;
               rememberRecentEpc(session.state, epc, {
                 source: eventName === "scan" ? "Live reader" : "Zone heartbeat",
                 assigned: Boolean(cachedItem),
@@ -633,11 +671,18 @@ function startLiveBridge() {
                   });
 
                   if (item && !itemInCart) {
-                    getSessionZoneTracker(session).touch(toZoneItem(item), Date.now());
+                    getSessionZoneTracker(session).touch(
+                      itemSold ? toReturnableZoneItem(item, epc) : toZoneItem(item),
+                      Date.now()
+                    );
                   }
 
                   if (eventName === "scan") {
-                    const scannedItem = item && !itemInCart ? toZoneItem(item) : null;
+                    const scannedItem = item && !itemInCart
+                      ? itemSold
+                        ? toReturnableZoneItem(item, epc)
+                        : toZoneItem(item)
+                      : null;
                     broadcastToState(session.state, {
                       type: "live.scan",
                       epc,
@@ -940,6 +985,10 @@ app.post("/api/pos/cart/checkout", requireSession, requireSelectedStore, async (
       }),
     });
 
+    for (const item of cart.items) {
+      markSoldEpc(req.retailSession.selectedStoreId, item.epc);
+    }
+
     const cleared = req.retailSession.state.cartStore.clear();
     broadcastToState(req.retailSession.state, {
       type: "pos.checkout.completed",
@@ -949,6 +998,7 @@ app.post("/api/pos/cart/checkout", requireSession, requireSelectedStore, async (
       subtotal_amount: cart.subtotal,
       discount: cart.discount,
       items_count: cart.count,
+      items: cart.items.map((item) => toReturnableZoneItem(item, item.epc)),
       transaction: result?.transaction || null,
       at: Date.now(),
     });
@@ -998,6 +1048,7 @@ app.post("/api/pos/return", requireSession, requireSelectedStore, async (req, re
       }),
     });
 
+    clearSoldEpc(req.retailSession.selectedStoreId, epc);
     const returnedItem = item ? toZoneItem(item) : { epc, price, currency: "LKR" };
     broadcastToState(req.retailSession.state, {
       type: "pos.return.completed",
@@ -1345,25 +1396,30 @@ app.post("/api/assignments", requireSession, requireSelectedStore, async (req, r
       throw new Error("Assignment was not saved to shared catalog");
     }
 
-    if (item.epc) {
-      req.retailSession.state.savedAssignments.set(normalizeEpc(item.epc), item);
-      rememberSharedAssignment(req.retailSession.selectedStoreId, item);
-      getSessionZoneTracker(req.retailSession).touch(toZoneItem(item), Date.now());
+    const confirmedItem = await lookupCatalogItem(req.retailSession, epc, { forceRemote: true });
+    if (!confirmedItem?.epc) {
+      throw new Error("Assignment saved but could not be confirmed in shared catalog");
     }
-    rememberRecentEpc(req.retailSession.state, item.epc, {
+
+    if (item.epc) {
+      req.retailSession.state.savedAssignments.set(normalizeEpc(item.epc), confirmedItem);
+      rememberSharedAssignment(req.retailSession.selectedStoreId, confirmedItem);
+      getSessionZoneTracker(req.retailSession).touch(toZoneItem(confirmedItem), Date.now());
+    }
+    rememberRecentEpc(req.retailSession.state, confirmedItem.epc, {
       source: "Assignment saved",
       assigned: true,
-      item,
+      item: confirmedItem,
     });
 
     broadcastToStoreSessions(req.retailSession.selectedStoreId, {
       type: "assignment.saved",
-      epc: item.epc,
-      item,
+      epc: confirmedItem.epc,
+      item: confirmedItem,
       at: Date.now(),
     });
 
-    return res.json({ ok: true, item, persisted: true });
+    return res.json({ ok: true, item: confirmedItem, persisted: true });
   } catch (err) {
     return res.status(500).json({ ok: false, error: err.message });
   }
