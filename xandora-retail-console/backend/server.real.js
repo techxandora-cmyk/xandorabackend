@@ -48,6 +48,10 @@ function normalizeStoreId(value) {
   return String(value || "").trim().toUpperCase();
 }
 
+function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 function createSessionId() {
   return crypto.randomBytes(24).toString("hex");
 }
@@ -479,6 +483,46 @@ async function lookupCatalogItem(session, epc, options = {}) {
   }
 
   return savedAssignment || null;
+}
+
+async function confirmCatalogItem(session, epc, attempts = 4) {
+  let lastError = null;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      const item = await lookupCatalogItem(session, epc, { forceRemote: true });
+      if (item?.epc) return item;
+    } catch (err) {
+      lastError = err;
+    }
+    if (attempt < attempts - 1) {
+      await wait(250);
+    }
+  }
+  if (lastError) {
+    console.warn("[retail-console] Assignment confirm lookup failed:", lastError.message);
+  }
+  return null;
+}
+
+async function checkStockVisibility(session, epc) {
+  const normalized = normalizeEpc(epc);
+  if (!normalized) return { visible: false, count: 0, summary: null, items: [] };
+
+  const body = await authorizedFetch(
+    session,
+    "retail",
+    `/api/v1/stock/search?store_id=${encodeURIComponent(
+      session.selectedStoreId
+    )}&q=${encodeURIComponent(normalized)}&limit=5`
+  );
+  const items = Array.isArray(body?.items) ? body.items : [];
+  const totalTags = Number(body?.summary?.total_tags || 0);
+  return {
+    visible: totalTags > 0 || items.length > 0,
+    count: totalTags || items.reduce((sum, row) => sum + Number(row.total_tags || 0), 0),
+    summary: body?.summary || null,
+    items,
+  };
 }
 
 async function ingestLiveScan(session, epc) {
@@ -1427,11 +1471,11 @@ app.post("/api/assignments", requireSession, requireSelectedStore, async (req, r
       throw new Error("Assignment was not saved to shared catalog");
     }
 
-    const confirmedItem =
-      (await lookupCatalogItem(req.retailSession, epc, { forceRemote: true }).catch((err) => {
-        console.warn("[retail-console] Assignment saved; confirm lookup lagged:", err.message);
-        return null;
-      })) || item;
+    const confirmedItem = (await confirmCatalogItem(req.retailSession, epc)) || item;
+    const stockCheck = await checkStockVisibility(req.retailSession, epc).catch((err) => {
+      console.warn("[retail-console] Assignment saved; stock visibility check failed:", err.message);
+      return { visible: false, count: 0, summary: null, items: [], error: err.message };
+    });
 
     if (item.epc) {
       req.retailSession.state.savedAssignments.set(normalizeEpc(item.epc), confirmedItem);
@@ -1451,7 +1495,15 @@ app.post("/api/assignments", requireSession, requireSelectedStore, async (req, r
       at: Date.now(),
     });
 
-    return res.json({ ok: true, item: confirmedItem, persisted: true });
+    return res.json({
+      ok: true,
+      item: confirmedItem,
+      persisted: Boolean(confirmedItem?.epc),
+      stock_visible: Boolean(stockCheck.visible),
+      stock_count: Number(stockCheck.count || 0),
+      stock_summary: stockCheck.summary,
+      stock_error: stockCheck.error || null,
+    });
   } catch (err) {
     return res.status(500).json({ ok: false, error: err.message });
   }

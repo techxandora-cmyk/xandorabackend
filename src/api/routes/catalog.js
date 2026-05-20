@@ -136,7 +136,7 @@ module.exports = function buildCatalogRoutes(pool) {
         updated_at,
         ${BARCODE_SQL} AS barcode
       FROM catalog_items
-      WHERE store_id = $1
+      WHERE UPPER(store_id) = UPPER($1)
         AND epc = ANY($2::varchar[])
         AND ${REAL_CATALOG_ROW_SQL}
       ORDER BY epc ASC
@@ -180,7 +180,7 @@ module.exports = function buildCatalogRoutes(pool) {
           updated_at,
           ${BARCODE_SQL} AS barcode
         FROM catalog_items
-        WHERE store_id = $1
+        WHERE UPPER(store_id) = UPPER($1)
           AND ${REAL_CATALOG_ROW_SQL}
         ORDER BY product_name ASC, epc ASC
         LIMIT $2
@@ -238,7 +238,7 @@ module.exports = function buildCatalogRoutes(pool) {
             updated_at,
             ${BARCODE_SQL} AS barcode
           FROM catalog_items
-          WHERE store_id = $1
+          WHERE UPPER(store_id) = UPPER($1)
             AND epc = $2
             AND ${REAL_CATALOG_ROW_SQL}
           LIMIT 1
@@ -260,7 +260,7 @@ module.exports = function buildCatalogRoutes(pool) {
           `
           SELECT COUNT(*)::int AS matched_count
           FROM catalog_items
-          WHERE store_id = $1
+          WHERE UPPER(store_id) = UPPER($1)
             AND UPPER(COALESCE(${BARCODE_SQL}, '')) = $2
             AND ${REAL_CATALOG_ROW_SQL}
           `,
@@ -282,7 +282,7 @@ module.exports = function buildCatalogRoutes(pool) {
             updated_at,
             ${BARCODE_SQL} AS barcode
           FROM catalog_items
-          WHERE store_id = $1
+          WHERE UPPER(store_id) = UPPER($1)
             AND UPPER(COALESCE(${BARCODE_SQL}, '')) = $2
             AND ${REAL_CATALOG_ROW_SQL}
           ORDER BY product_name ASC, epc ASC
@@ -393,7 +393,7 @@ module.exports = function buildCatalogRoutes(pool) {
         `
         SELECT COUNT(*)::int AS matched_count
         FROM catalog_items
-        WHERE store_id = $1
+        WHERE UPPER(store_id) = UPPER($1)
           AND UPPER(COALESCE(${BARCODE_SQL}, '')) = $2
         `,
         [store_id, barcode]
@@ -702,7 +702,7 @@ module.exports = function buildCatalogRoutes(pool) {
           updated_at,
           ${BARCODE_SQL} AS barcode
         FROM catalog_items
-        WHERE store_id = $1
+        WHERE UPPER(store_id) = UPPER($1)
           AND epc = ANY($2::varchar[])
         ORDER BY epc ASC
         `,
@@ -726,7 +726,7 @@ module.exports = function buildCatalogRoutes(pool) {
         `
         SELECT epc
         FROM catalog_items
-        WHERE store_id = $1
+        WHERE UPPER(store_id) = UPPER($1)
           AND epc = ANY($2::varchar[])
         ORDER BY epc ASC
         `,
@@ -747,7 +747,7 @@ module.exports = function buildCatalogRoutes(pool) {
         UPDATE catalog_items
         SET store_id = $2,
             updated_at = NOW()
-        WHERE store_id = $1
+        WHERE UPPER(store_id) = UPPER($1)
           AND epc = ANY($3::varchar[])
         `,
         [source_store_id, destination_store_id, epcs]
@@ -759,7 +759,7 @@ module.exports = function buildCatalogRoutes(pool) {
           UPDATE tag_registry
           SET store_id = $2,
               updated_at = NOW()
-          WHERE store_id = $1
+          WHERE UPPER(store_id) = UPPER($1)
             AND epc = ANY($3::varchar[])
           `,
           [source_store_id, destination_store_id, epcs]

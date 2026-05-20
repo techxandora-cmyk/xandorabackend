@@ -1620,6 +1620,11 @@
       try {
         const result = await apiPost("/api/assignments", payload);
         pushLog(`Assigned ${result.item.epc} to ${result.item.name}`);
+        if (result.stock_visible) {
+          pushLog(`Stock updated: ${result.item.epc} is visible in webapp stock`);
+        } else {
+          pushLog(`Stock sync pending: ${result.item.epc} saved, but stock API did not show it yet`);
+        }
         if (refs.manualEpc) refs.manualEpc.value = result.item.epc;
         state.assignments = upsertByEpc(state.assignments, result.item);
         state.inZone = upsertByEpc(state.inZone, {
