@@ -1,6 +1,7 @@
 const express = require("express");
 const jwt = require("jsonwebtoken");
 const { ensureCatalogTable } = require("./lib/catalogTable");
+const { writeAuditLog } = require("./lib/audit");
 
 const BARCODE_SQL = `
   COALESCE(
@@ -34,6 +35,17 @@ function returnRateSql(soldExpr, returnedExpr) {
       ELSE 0
     END
   `;
+}
+
+function normalizeEpc(v) {
+  return String(v || "").trim().toUpperCase();
+}
+
+function actorFromRequest(req) {
+  return {
+    actor_user_id: Number(req.user?.user_id) || null,
+    actor_email: String(req.user?.email || "").trim().toLowerCase() || null,
+  };
 }
 
 module.exports = function buildStockRoutes(pool) {
@@ -478,6 +490,116 @@ module.exports = function buildStockRoutes(pool) {
     } catch (err) {
       console.error("[stock/epcs]", err);
       return res.status(500).json({ ok: false, error: "Failed to fetch stock EPC details" });
+    }
+  });
+
+  router.delete("/epcs/:epc", async (req, res) => {
+    const client = await pool.connect();
+    try {
+      const store_id = req.query.store_id ? String(req.query.store_id).trim() : "";
+      const epc = normalizeEpc(req.params.epc);
+
+      if (!store_id) {
+        return res.status(400).json({ ok: false, error: "store_id required" });
+      }
+
+      if (!epc) {
+        return res.status(400).json({ ok: false, error: "epc required" });
+      }
+
+      if (!canAccessStore(req, store_id)) {
+        return res.status(403).json({ ok: false, error: "Forbidden" });
+      }
+
+      await ensureCatalogTable(client);
+      await client.query("BEGIN");
+
+      const deletedResult = await client.query(
+        `
+        DELETE FROM catalog_items
+        WHERE store_id = $1
+          AND epc = $2
+        RETURNING
+          store_id,
+          epc,
+          sku,
+          product_name,
+          brand,
+          category,
+          size_label,
+          color,
+          price_lkr,
+          COALESCE(
+            NULLIF(TRIM(metadata->>'barcode'), ''),
+            NULLIF(TRIM(metadata->>'upc'), ''),
+            NULLIF(TRIM(metadata->>'ean'), ''),
+            NULLIF(TRIM(metadata->>'gtin'), ''),
+            NULLIF(TRIM(metadata->>'bar_code'), '')
+          ) AS barcode
+        `,
+        [store_id, epc]
+      );
+
+      if (!deletedResult.rowCount) {
+        await client.query("ROLLBACK");
+        return res.status(404).json({ ok: false, error: "EPC not found in stock" });
+      }
+
+      const deleted = deletedResult.rows[0];
+      await writeAuditLog(client, {
+        ...actorFromRequest(req),
+        action: "CATALOG_ITEM_DELETE",
+        entity_type: "CATALOG_ITEM",
+        entity_id: `${store_id}:${epc}`,
+        store_id,
+        metadata: {
+          epc,
+          sku: deleted.sku || null,
+          barcode: deleted.barcode || null,
+          product_name: deleted.product_name || null,
+          brand: deleted.brand || null,
+          category: deleted.category || null,
+          size_label: deleted.size_label || null,
+          color: deleted.color || null,
+          price_lkr: deleted.price_lkr != null ? Number(deleted.price_lkr) : null,
+        },
+      });
+
+      await client.query("COMMIT");
+
+      const broadcast = req.app.locals.broadcastEvent;
+      if (typeof broadcast === "function") {
+        const eventPayload = {
+          store_id,
+          epc,
+          sku: deleted.sku || null,
+          product_name: deleted.product_name || null,
+          brand: deleted.brand || null,
+          category: deleted.category || null,
+          size_label: deleted.size_label || null,
+          color: deleted.color || null,
+          price_lkr: deleted.price_lkr != null ? Number(deleted.price_lkr) : null,
+          barcode: deleted.barcode || null,
+          source: "stock.delete-epc",
+          at: new Date().toISOString(),
+        };
+
+        broadcast("catalog_item_deleted", eventPayload);
+        broadcast("stock_changed", eventPayload);
+        broadcast("metrics_changed", {
+          store_id,
+          source: "stock.delete-epc",
+          at: eventPayload.at,
+        });
+      }
+
+      return res.json({ ok: true, deleted });
+    } catch (err) {
+      await client.query("ROLLBACK").catch(() => {});
+      console.error("[stock/delete-epc]", err);
+      return res.status(500).json({ ok: false, error: "Failed to delete stock EPC" });
+    } finally {
+      client.release();
     }
   });
 

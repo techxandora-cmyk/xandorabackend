@@ -1,5 +1,5 @@
 ﻿import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
-import { apiGet } from "@/lib/api";
+import { apiDelete, apiGet } from "@/lib/api";
 import { buildEventsStreamUrl } from "@/config/api";
 
 function toNum(v) {
@@ -31,6 +31,8 @@ export default function Stock() {
   const [detailLoadingKey, setDetailLoadingKey] = useState("");
   const [detailError, setDetailError] = useState("");
   const [detailsByGroup, setDetailsByGroup] = useState({});
+  const [message, setMessage] = useState("");
+  const [deletingEpc, setDeletingEpc] = useState("");
 
   const loadStock = useCallback(
     async (overrides = {}) => {
@@ -321,6 +323,60 @@ export default function Stock() {
     }
   }
 
+  async function deleteStockEpc(epc, groupKey) {
+    const normalized = String(epc || "").trim().toUpperCase();
+    if (!normalized || deletingEpc) return;
+    if (!window.confirm(`Delete EPC ${normalized} from stock?`)) return;
+
+    setDeletingEpc(normalized);
+    setError("");
+    setMessage("");
+
+    try {
+      await apiDelete(
+        `/stock/epcs/${encodeURIComponent(normalized)}?store_id=${encodeURIComponent(storeId)}`
+      );
+
+      setDetailsByGroup((prev) => {
+        const current = prev[groupKey];
+        if (!current) return prev;
+        const items = (current.items || []).filter((item) => item.epc !== normalized);
+        const summary = items.reduce(
+          (acc, item) => {
+            acc.total_tags += 1;
+            if (item.stock_state === "SOLD") {
+              acc.sold_tags += 1;
+            } else {
+              acc.in_stock_tags += 1;
+            }
+            if (item.stock_state === "RETURNED") {
+              acc.returned_tags += 1;
+            }
+            return acc;
+          },
+          { total_tags: 0, in_stock_tags: 0, sold_tags: 0, returned_tags: 0 }
+        );
+
+        return {
+          ...prev,
+          [groupKey]: {
+            ...current,
+            items,
+            count: items.length,
+            summary,
+          },
+        };
+      });
+
+      setMessage(`Deleted EPC ${normalized} from stock.`);
+      await loadStock();
+    } catch (e) {
+      setError(e?.message || "Failed to delete stock EPC");
+    } finally {
+      setDeletingEpc("");
+    }
+  }
+
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-6">
       <div className="mb-6">
@@ -338,6 +394,12 @@ export default function Stock() {
       {error ? (
         <div className="mb-4 rounded border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">
           {error}
+        </div>
+      ) : null}
+
+      {message ? (
+        <div className="mb-4 rounded border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-700 dark:text-emerald-300">
+          {message}
         </div>
       ) : null}
 
@@ -539,6 +601,7 @@ export default function Stock() {
                                         <th className="px-3 py-2 text-right">Sold Balance</th>
                                         <th className="px-3 py-2 text-right">Return Events</th>
                                         <th className="px-3 py-2 text-right">Price</th>
+                                        <th className="px-3 py-2 text-right">Action</th>
                                       </tr>
                                     </thead>
                                     <tbody>
@@ -586,6 +649,16 @@ export default function Stock() {
                                           </td>
                                           <td className="px-3 py-2 text-right">
                                             {Number(item.price_lkr || 0).toFixed(2)}
+                                          </td>
+                                          <td className="px-3 py-2 text-right">
+                                            <button
+                                              type="button"
+                                              onClick={() => deleteStockEpc(item.epc, key)}
+                                              disabled={deletingEpc === item.epc}
+                                              className="rounded border border-red-500/40 px-2 py-1 text-[10px] font-semibold text-red-700 hover:bg-red-500/10 disabled:opacity-50 dark:text-red-300"
+                                            >
+                                              {deletingEpc === item.epc ? "Deleting..." : "Delete"}
+                                            </button>
                                           </td>
                                         </tr>
                                         ))}
