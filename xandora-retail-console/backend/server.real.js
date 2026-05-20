@@ -19,7 +19,7 @@ const MAIN_API_URL = String(
 const RETAIL_DEVICE_ID = String(
   process.env.RETAIL_DEVICE_ID || "RETAIL_CONSOLE_01"
 ).trim();
-const IN_ZONE_TIMEOUT_MS = Number(process.env.DEMO_IN_ZONE_TIMEOUT_MS || 900);
+const IN_ZONE_TIMEOUT_MS = Number(process.env.DEMO_IN_ZONE_TIMEOUT_MS || 30000);
 const RECENT_EPC_TTL_MS = 10 * 60 * 1000;
 const SESSION_IDLE_MS = Math.max(
   Number(process.env.RETAIL_SESSION_IDLE_MS || 12 * 60 * 60 * 1000),

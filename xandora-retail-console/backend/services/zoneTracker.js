@@ -1,6 +1,6 @@
 class ZoneTracker {
   constructor({ inZoneTimeoutMs }) {
-    this.inZoneTimeoutMs = Math.max(Number(inZoneTimeoutMs || 4000), 500);
+    this.inZoneTimeoutMs = Math.max(Number(inZoneTimeoutMs || 4000), 1000);
     this.itemsByEpc = new Map();
     this.listeners = new Set();
   }

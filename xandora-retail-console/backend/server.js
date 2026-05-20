@@ -10,7 +10,7 @@ const { LiveBridge } = require("./services/liveBridge");
 
 const PORT = Number(process.env.PORT || 4300);
 const HOST = process.env.HOST || "0.0.0.0";
-const IN_ZONE_TIMEOUT_MS = Number(process.env.DEMO_IN_ZONE_TIMEOUT_MS || 900);
+const IN_ZONE_TIMEOUT_MS = Number(process.env.DEMO_IN_ZONE_TIMEOUT_MS || 30000);
 const CLEANUP_INTERVAL_MS = Number(process.env.DEMO_CLEANUP_INTERVAL_MS || 1000);
 const SIM_INTERVAL_MS = Number(process.env.DEMO_SIM_INTERVAL_MS || 1400);
 const MAIN_API_URL = String(process.env.MAIN_API_URL || "").trim();

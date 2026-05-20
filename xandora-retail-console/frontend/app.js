@@ -3,7 +3,7 @@
   const SESSION_STORAGE_KEY = "xandora_retail_console_session";
   const REMEMBERED_EMAIL_KEY = "xandora_retail_console_email";
   const THEME_STORAGE_KEY = "xandora_retail_console_theme";
-  const LIVE_BIN_MAX_AGE_SEC = 1.5;
+  const LIVE_BIN_MAX_AGE_SEC = 30;
 
   const state = {
     activeView: "billing",
@@ -1057,8 +1057,14 @@
           }
           if (type === "assignment.saved" && data.item) {
             state.assignments = upsertByEpc(state.assignments, data.item);
+            state.inZone = upsertByEpc(state.inZone, {
+              ...data.item,
+              firstSeenAt: data.at || Date.now(),
+              lastSeenAt: data.at || Date.now(),
+            });
             renderAssignments();
             renderRecentAssigned();
+            renderInZone();
             upsertRecentEpc({
               epc: data.item.epc,
               source: "Assignment saved",
@@ -1491,6 +1497,12 @@
         const result = await apiPost("/api/assignments", payload);
         pushLog(`Assigned ${result.item.epc} to ${result.item.name}`);
         refs.manualEpc.value = result.item.epc;
+        state.inZone = upsertByEpc(state.inZone, {
+          ...result.item,
+          firstSeenAt: Date.now(),
+          lastSeenAt: Date.now(),
+        });
+        renderInZone();
         await Promise.all([refreshAssignments(), refreshInventory(), refreshRecentEpcs()]);
       } catch (err) {
         pushLog(`Assignment failed: ${err.message}`);
