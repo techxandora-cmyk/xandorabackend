@@ -517,9 +517,13 @@ async function checkStockVisibility(session, epc) {
   );
   const items = Array.isArray(body?.items) ? body.items : [];
   const totalTags = Number(body?.summary?.total_tags || 0);
+  const catalogItem = totalTags > 0 || items.length > 0
+    ? null
+    : await lookupCatalogItem(session, normalized, { forceRemote: true }).catch(() => null);
   return {
     visible: totalTags > 0 || items.length > 0,
     count: totalTags || items.reduce((sum, row) => sum + Number(row.total_tags || 0), 0),
+    catalog_visible: Boolean(catalogItem?.epc),
     summary: body?.summary || null,
     items,
   };
@@ -1501,6 +1505,7 @@ app.post("/api/assignments", requireSession, requireSelectedStore, async (req, r
       persisted: Boolean(confirmedItem?.epc),
       stock_visible: Boolean(stockCheck.visible),
       stock_count: Number(stockCheck.count || 0),
+      catalog_visible: Boolean(stockCheck.catalog_visible),
       stock_summary: stockCheck.summary,
       stock_error: stockCheck.error || null,
     });

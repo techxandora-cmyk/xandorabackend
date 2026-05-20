@@ -28,6 +28,21 @@ const GROUP_KEY_SQL = `
   )
 `;
 
+const CATALOG_GROUP_KEY_SQL = `
+  md5(
+    concat_ws(
+      '||',
+      COALESCE(${BARCODE_SQL}, ''),
+      COALESCE(c.sku, ''),
+      COALESCE(c.product_name, ''),
+      COALESCE(c.brand, ''),
+      COALESCE(c.category, ''),
+      COALESCE(c.size_label, ''),
+      COALESCE(c.color, '')
+    )
+  )
+`;
+
 function returnRateSql(soldExpr, returnedExpr) {
   return `
     CASE
@@ -228,6 +243,71 @@ module.exports = function buildStockRoutes(pool) {
     `;
   }
 
+  function buildDirectStockSearchCtes(whereSql) {
+    return `
+      WITH epc_states AS (
+        SELECT
+          pti.epc,
+          COALESCE(
+            SUM(
+              CASE
+                WHEN UPPER(COALESCE(pt.metadata->>'txn_type', '')) IN ('RETURN', 'REFUND')
+                  OR COALESCE(pt.total_amount, 0) < 0
+                  OR COALESCE(pt.total_items, 0) < 0
+                  THEN -1
+                ELSE 1
+              END
+            ),
+            0
+          )::int AS sold_balance,
+          COALESCE(
+            SUM(
+              CASE
+                WHEN UPPER(COALESCE(pt.metadata->>'txn_type', '')) IN ('RETURN', 'REFUND')
+                  OR COALESCE(pt.total_amount, 0) < 0
+                  OR COALESCE(pt.total_items, 0) < 0
+                  THEN 1
+                ELSE 0
+              END
+            ),
+            0
+          )::int AS return_events
+        FROM pos_transaction_items pti
+        JOIN pos_transactions pt ON pt.id = pti.pos_txn_id
+        WHERE UPPER(pt.store_id) = UPPER($1)
+        GROUP BY pti.epc
+      ),
+      product_rollup AS (
+        SELECT
+          c.store_id,
+          ${CATALOG_GROUP_KEY_SQL} AS group_key,
+          ${BARCODE_SQL} AS barcode,
+          c.sku,
+          c.product_name,
+          c.brand,
+          c.category,
+          c.size_label,
+          c.color,
+          COUNT(*)::int AS total_tags,
+          COALESCE(SUM(CASE WHEN COALESCE(es.sold_balance, 0) > 0 THEN 1 ELSE 0 END), 0)::int AS sold_count,
+          COALESCE(SUM(CASE WHEN COALESCE(es.sold_balance, 0) <= 0 THEN 1 ELSE 0 END), 0)::int AS in_stock_count,
+          COALESCE(SUM(CASE WHEN COALESCE(es.return_events, 0) > 0 THEN 1 ELSE 0 END), 0)::int AS returned_count
+        FROM catalog_items c
+        LEFT JOIN epc_states es ON es.epc = c.epc
+        WHERE ${whereSql}
+        GROUP BY
+          c.store_id,
+          ${BARCODE_SQL},
+          c.sku,
+          c.product_name,
+          c.brand,
+          c.category,
+          c.size_label,
+          c.color
+      )
+    `;
+  }
+
   router.use(authenticate);
 
   router.get("/search", async (req, res) => {
@@ -293,37 +373,7 @@ module.exports = function buildStockRoutes(pool) {
         i += 1;
       }
 
-      const ctes = `
-        ${buildStockStateCtes(where.join(" AND "))}
-        ,
-        product_rollup AS (
-          SELECT
-            fc.store_id,
-            ${GROUP_KEY_SQL} AS group_key,
-            fc.barcode,
-            fc.sku,
-            fc.product_name,
-            fc.brand,
-            fc.category,
-            fc.size_label,
-            fc.color,
-            COUNT(*)::int AS total_tags,
-            COALESCE(SUM(CASE WHEN COALESCE(es.sold_balance, 0) > 0 THEN 1 ELSE 0 END), 0)::int AS sold_count,
-            COALESCE(SUM(CASE WHEN COALESCE(es.sold_balance, 0) <= 0 THEN 1 ELSE 0 END), 0)::int AS in_stock_count,
-            COALESCE(SUM(CASE WHEN COALESCE(es.return_events, 0) > 0 THEN 1 ELSE 0 END), 0)::int AS returned_count
-          FROM filtered_catalog fc
-          LEFT JOIN epc_states es ON es.epc = fc.epc
-          GROUP BY
-            fc.store_id,
-            fc.barcode,
-            fc.sku,
-            fc.product_name,
-            fc.brand,
-            fc.category,
-            fc.size_label,
-            fc.color
-        )
-      `;
+      const ctes = buildDirectStockSearchCtes(where.join(" AND "));
 
       const itemsValues = [...values, limit, offset];
       const itemsLimitParam = `$${values.length + 1}`;

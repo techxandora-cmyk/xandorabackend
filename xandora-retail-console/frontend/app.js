@@ -1622,6 +1622,10 @@
         pushLog(`Assigned ${result.item.epc} to ${result.item.name}`);
         if (result.stock_visible) {
           pushLog(`Stock updated: ${result.item.epc} is visible in webapp stock`);
+        } else if (result.catalog_visible) {
+          pushLog(`Stock sync pending: ${result.item.epc} is in catalog, stock search is catching up`);
+        } else if (result.stock_error) {
+          pushLog(`Stock sync failed: ${result.stock_error}`);
         } else {
           pushLog(`Stock sync pending: ${result.item.epc} saved, but stock API did not show it yet`);
         }
