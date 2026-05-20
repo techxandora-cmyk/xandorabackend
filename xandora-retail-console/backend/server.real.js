@@ -530,6 +530,18 @@ async function checkStockVisibility(session, epc) {
   };
 }
 
+async function debugStockEpc(session, epc) {
+  const normalized = normalizeEpc(epc);
+  if (!normalized) return null;
+  return authorizedFetch(
+    session,
+    "retail",
+    `/api/v1/stock/debug-epc?store_id=${encodeURIComponent(
+      session.selectedStoreId
+    )}&epc=${encodeURIComponent(normalized)}`
+  );
+}
+
 async function ingestLiveScan(session, epc) {
   const normalized = normalizeEpc(epc);
   if (!normalized) {
@@ -1481,6 +1493,12 @@ app.post("/api/assignments", requireSession, requireSelectedStore, async (req, r
       console.warn("[retail-console] Assignment saved; stock visibility check failed:", err.message);
       return { visible: false, count: 0, summary: null, items: [], error: err.message };
     });
+    const stockDebug = stockCheck.visible
+      ? null
+      : await debugStockEpc(req.retailSession, epc).catch((err) => ({
+          ok: false,
+          error: err.message,
+        }));
 
     if (item.epc) {
       req.retailSession.state.savedAssignments.set(normalizeEpc(item.epc), confirmedItem);
@@ -1507,6 +1525,7 @@ app.post("/api/assignments", requireSession, requireSelectedStore, async (req, r
       stock_visible: Boolean(stockCheck.visible),
       stock_count: Number(stockCheck.count || 0),
       catalog_visible: Boolean(stockCheck.catalog_visible),
+      stock_debug: stockDebug,
       stock_summary: stockCheck.summary,
       stock_error: stockCheck.error || null,
     });

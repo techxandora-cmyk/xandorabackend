@@ -445,6 +445,78 @@ module.exports = function buildStockRoutes(pool) {
     }
   });
 
+  router.get("/debug-epc", async (req, res) => {
+    try {
+      const store_id = req.query.store_id ? String(req.query.store_id).trim() : "";
+      const epc = normalizeEpc(req.query.epc);
+
+      if (!store_id) {
+        return res.status(400).json({ ok: false, error: "store_id required" });
+      }
+
+      if (!epc) {
+        return res.status(400).json({ ok: false, error: "epc required" });
+      }
+
+      if (!canAccessStore(req, store_id)) {
+        return res.status(403).json({ ok: false, error: "Forbidden" });
+      }
+
+      await ensureCatalogTable(pool);
+
+      const [catalogResult, stockResult] = await Promise.all([
+        pool.query(
+          `
+          SELECT
+            store_id,
+            epc,
+            sku,
+            product_name,
+            brand,
+            category,
+            size_label,
+            color,
+            price_lkr,
+            metadata,
+            updated_at,
+            ${BARCODE_SQL} AS barcode
+          FROM catalog_items c
+          WHERE UPPER(c.store_id) = UPPER($1)
+            AND c.epc = $2
+          ORDER BY updated_at DESC
+          LIMIT 10
+          `,
+          [store_id, epc]
+        ),
+        pool.query(
+          `
+          ${buildDirectStockSearchCtes("UPPER(c.store_id) = UPPER($1) AND c.epc = $2")}
+          SELECT
+            COUNT(*)::int AS products,
+            COALESCE(SUM(total_tags), 0)::int AS total_tags,
+            COALESCE(SUM(in_stock_count), 0)::int AS in_stock_tags,
+            COALESCE(SUM(sold_count), 0)::int AS sold_tags,
+            COALESCE(SUM(returned_count), 0)::int AS returned_tags
+          FROM product_rollup
+          `,
+          [store_id, epc]
+        ),
+      ]);
+
+      return res.json({
+        ok: true,
+        store_id,
+        epc,
+        catalog_count: catalogResult.rowCount,
+        catalog_items: catalogResult.rows,
+        stock_summary: stockResult.rows[0] || null,
+      });
+    } catch (err) {
+      console.error("[stock/debug-epc]", err);
+      return res.status(500).json({ ok: false, error: "Failed to debug stock EPC" });
+    }
+  });
+
   router.get("/epcs", async (req, res) => {
     try {
       const store_id = req.query.store_id ? String(req.query.store_id) : null;

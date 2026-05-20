@@ -1624,6 +1624,10 @@
           pushLog(`Stock updated: ${result.item.epc} is visible in webapp stock`);
         } else if (result.catalog_visible) {
           pushLog(`Stock sync pending: ${result.item.epc} is in catalog, stock search is catching up`);
+        } else if (result.stock_debug?.ok) {
+          pushLog(
+            `Stock debug: catalog rows ${result.stock_debug.catalog_count || 0}, stock tags ${result.stock_debug.stock_summary?.total_tags || 0}`
+          );
         } else if (result.stock_error) {
           pushLog(`Stock sync failed: ${result.stock_error}`);
         } else {
