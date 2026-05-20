@@ -212,6 +212,23 @@
     refs.eventLog.textContent = state.logLines.join("\n");
   }
 
+  async function withButtonBusy(button, busyLabel, work) {
+    if (!button) return work();
+    const idleLabel = button.textContent;
+    button.disabled = true;
+    button.textContent = busyLabel;
+    button.classList.add("is-refreshing");
+    try {
+      return await work();
+    } finally {
+      button.disabled = false;
+      button.textContent = idleLabel;
+      button.classList.remove("is-refreshing");
+      button.classList.add("just-refreshed");
+      setTimeout(() => button.classList.remove("just-refreshed"), 420);
+    }
+  }
+
   function setStoredSessionId(sessionId) {
     state.sessionId = String(sessionId || "").trim();
     if (state.sessionId) {
@@ -253,7 +270,6 @@
   function applyProductVisibility() {
     const products = Array.isArray(state.session?.products) ? state.session.products : [];
     const hasLaundry = products.includes("laundry");
-    const hasStockAudit = products.includes("stock_audit");
 
     refs.tabs.laundry.hidden = !hasLaundry;
     refs.manualLaundryBtn.hidden = !hasLaundry;
@@ -261,9 +277,6 @@
     if (!hasLaundry && state.activeView === "laundry") {
       activateTab("billing");
     }
-
-    refs.manualStocktakeBtn.disabled = !hasStockAudit;
-    refs.clearStocktakeBtn.disabled = !hasStockAudit;
   }
 
   function setRememberedEmail(email) {
@@ -897,11 +910,11 @@
       if (state.activeView === "billing") {
         await refreshBilling();
       } else if (state.activeView === "inventory") {
-        await Promise.all([refreshInventory(), refreshStocktake()]);
+        await refreshBilling();
       } else if (state.activeView === "laundry") {
         await refreshLaundry();
       } else if (state.activeView === "assign") {
-        await Promise.all([refreshAssignments(), refreshRecentEpcs(), refreshInventory()]);
+        await Promise.all([refreshAssignments(), refreshRecentEpcs()]);
       } else {
         await refreshAll();
       }
@@ -913,7 +926,7 @@
 
   function syncSharedCatalog() {
     if (!state.sessionId) return;
-    Promise.all([refreshAssignments(), refreshInventory(), refreshRecentEpcs()]).catch(() => {});
+    Promise.all([refreshAssignments(), refreshRecentEpcs()]).catch(() => {});
   }
 
   function startSharedCatalogSync() {
@@ -940,8 +953,6 @@
         refreshHealthAndStatus(),
         refreshInZone(),
         refreshCart(),
-        refreshInventory(),
-        refreshStocktake(),
         refreshLaundry(),
         refreshAssignments(),
         refreshRecentEpcs(),
@@ -959,13 +970,11 @@
       if (scope === "pos") {
         refreshCart().catch(() => {});
         refreshInZone().catch(() => {});
-        refreshInventory().catch(() => {});
         return;
       }
       if (scope === "assignment") {
         refreshAssignments().catch(() => {});
         refreshRecentEpcs().catch(() => {});
-        refreshInventory().catch(() => {});
         return;
       }
       if (scope === "inventory") {
@@ -1121,9 +1130,11 @@
   function activateTab(tabName) {
     state.activeView = tabName;
     for (const [name, tab] of Object.entries(refs.tabs)) {
+      if (!tab) continue;
       tab.classList.toggle("active", name === tabName);
     }
     for (const [name, view] of Object.entries(refs.views)) {
+      if (!view) continue;
       view.classList.toggle("active", name === tabName);
     }
   }
@@ -1163,7 +1174,7 @@
       refs.checkoutModalPrint.focus();
       state.cart = result.cleared_cart || { items: [], count: 0, total: 0, currency: "LKR" };
       renderCart();
-      await Promise.all([refreshInventory(), refreshRecentEpcs()]).catch(() => {});
+      await Promise.all([refreshRecentEpcs(), refreshInZone()]).catch(() => {});
       pushLog(`Checkout completed: ${result.items_count || 0} item(s)`);
     } catch (err) {
       pushLog(`Checkout failed: ${err.message}`);
@@ -1225,7 +1236,7 @@
       refs.checkoutModalPrint.focus();
       if (refs.printBillBtn) refs.printBillBtn.disabled = false;
       refs.manualEpc.value = "";
-      await Promise.all([refreshInventory(), refreshAssignments(), refreshRecentEpcs()]).catch(() => {});
+      await Promise.all([refreshAssignments(), refreshRecentEpcs()]).catch(() => {});
       pushLog(`Return completed: ${epc}`);
     } catch (err) {
       pushLog(`Return failed: ${err.message}`);
@@ -1249,8 +1260,8 @@
     refs.assignColor.value = item.color || "";
     refs.assignPrice.value = item.price || "";
     refs.assignStock.value = item.stock || 1;
-    refs.assignLaundryStatus.value = item.laundryStatus || "Ready";
-    refs.assignNotes.value = item.notes || "";
+    if (refs.assignLaundryStatus) refs.assignLaundryStatus.value = item.laundryStatus || "Ready";
+    if (refs.assignNotes) refs.assignNotes.value = item.notes || "";
   }
 
   async function handleLoginSubmit(evt) {
@@ -1339,10 +1350,17 @@
   function bindUi() {
     refs.themeToggleBtn.addEventListener("click", toggleTheme);
     refs.tabs.billing.addEventListener("click", () => activateTab("billing"));
-    refs.tabs.inventory.addEventListener("click", () => activateTab("inventory"));
+    if (refs.tabs.inventory) {
+      refs.tabs.inventory.addEventListener("click", () => activateTab("inventory"));
+    }
     refs.tabs.laundry.addEventListener("click", () => activateTab("laundry"));
     refs.tabs.assign.addEventListener("click", () => activateTab("assign"));
-    refs.refreshBtn.addEventListener("click", () => refreshActiveView());
+    refs.refreshBtn.addEventListener("click", () =>
+      withButtonBusy(refs.refreshBtn, "Refreshing...", async () => {
+        await refreshActiveView();
+        pushLog("Billing refreshed");
+      })
+    );
     refs.laundryFilter.addEventListener("change", renderLaundry);
     refs.checkoutBtn.addEventListener("click", checkoutCart);
     if (refs.printBillBtn) {
@@ -1362,8 +1380,18 @@
     refs.checkoutModal.addEventListener("click", (evt) => {
       if (evt.target === refs.checkoutModal) closeCheckoutModal();
     });
-    refs.assignmentRefreshBtn.addEventListener("click", () => refreshAssignments());
-    refs.recentEpcsRefreshBtn.addEventListener("click", () => refreshRecentEpcs());
+    refs.assignmentRefreshBtn.addEventListener("click", () =>
+      withButtonBusy(refs.assignmentRefreshBtn, "Refreshing...", async () => {
+        await Promise.all([refreshAssignments(), refreshRecentEpcs()]);
+        pushLog("Assignments refreshed");
+      })
+    );
+    refs.recentEpcsRefreshBtn.addEventListener("click", () =>
+      withButtonBusy(refs.recentEpcsRefreshBtn, "Refreshing...", async () => {
+        await refreshRecentEpcs();
+        pushLog("Recent EPCs refreshed");
+      })
+    );
     refs.simToggleBtn.addEventListener("click", toggleSimulator);
     refs.switchStoreBtn.addEventListener("click", () => {
       const stores = Array.isArray(state.session?.stores) ? state.session.stores : [];
@@ -1490,21 +1518,32 @@
         color: refs.assignColor.value,
         price: refs.assignPrice.value || 0,
         stock: refs.assignStock.value || 1,
-        laundryStatus: refs.assignLaundryStatus.value,
-        notes: refs.assignNotes.value,
+        laundryStatus: refs.assignLaundryStatus?.value || "",
+        notes: refs.assignNotes?.value || "",
       };
 
       try {
         const result = await apiPost("/api/assignments", payload);
         pushLog(`Assigned ${result.item.epc} to ${result.item.name}`);
         refs.manualEpc.value = result.item.epc;
+        state.assignments = upsertByEpc(state.assignments, result.item);
         state.inZone = upsertByEpc(state.inZone, {
           ...result.item,
           firstSeenAt: Date.now(),
           lastSeenAt: Date.now(),
         });
+        upsertRecentEpc({
+          epc: result.item.epc,
+          source: "Assignment saved",
+          seenAt: Date.now(),
+          seenAtIso: new Date().toISOString(),
+          assigned: true,
+          item: result.item,
+        });
+        renderAssignments();
+        renderRecentAssigned();
         renderInZone();
-        await Promise.all([refreshAssignments(), refreshInventory(), refreshRecentEpcs()]);
+        Promise.all([refreshAssignments(), refreshRecentEpcs(), refreshInZone()]).catch(() => {});
       } catch (err) {
         pushLog(`Assignment failed: ${err.message}`);
       }

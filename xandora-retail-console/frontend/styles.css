@@ -323,6 +323,22 @@ html[data-theme="light"] .text-input::placeholder {
   filter: brightness(1.08);
 }
 
+.btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
+.btn.is-refreshing {
+  cursor: wait;
+  opacity: 0.86;
+  box-shadow: 0 0 0 1px rgba(22, 249, 243, 0.28), 0 0 18px rgba(22, 249, 243, 0.16);
+}
+
+.btn.just-refreshed {
+  border-color: rgba(22, 249, 243, 0.62);
+  box-shadow: 0 0 0 1px rgba(22, 249, 243, 0.26);
+}
+
 html[data-theme="light"] .btn:hover {
   filter: brightness(0.98);
 }

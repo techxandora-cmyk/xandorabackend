@@ -603,6 +603,15 @@ function startLiveBridge() {
 
               if (cachedZoneItem) {
                 getSessionZoneTracker(session).touch(cachedZoneItem, Date.now());
+                broadcastToState(session.state, {
+                  type: "live.touch",
+                  epc,
+                  item: {
+                    ...cachedZoneItem,
+                    lastSeenAt: Date.now(),
+                  },
+                  at: Date.now(),
+                });
               }
 
               broadcastToState(session.state, {
@@ -1292,20 +1301,6 @@ app.get("/api/assignments/recent-epcs", requireSession, requireSelectedStore, as
     }
 
     const items = [...byEpc.values()];
-    await Promise.all(
-      items
-        .filter((row) => !row.assigned)
-        .slice(0, 30)
-        .map(async (row) => {
-          const item = await lookupCatalogItem(req.retailSession, row.epc, {
-            forceRemote: true,
-          }).catch(() => null);
-          if (!item) return;
-          row.item = item;
-          row.assigned = true;
-        })
-    );
-
     items.sort((a, b) => Number(b.seenAt || 0) - Number(a.seenAt || 0));
     return res.json({ items: items.slice(0, 30), count: items.length });
   } catch (err) {

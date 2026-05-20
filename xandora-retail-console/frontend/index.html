@@ -21,7 +21,7 @@
           </div>
           <div class="brand-copy">
             <h1>Xandora Retail Console</h1>
-            <p>RFID billing, inventory intake, and laundry operations</p>
+            <p>RFID billing and tag assignment operations</p>
           </div>
         </div>
         <div class="status-wrap">
@@ -43,7 +43,7 @@
         </div>
       </header>
 
-      <div class="intro-strip">
+      <div class="intro-strip" hidden>
         <div class="intro-card">
           <div class="intro-card-num">01</div>
           <div class="intro-card-body">
@@ -76,7 +76,6 @@
 
       <nav class="tabs">
         <button id="tab-billing" class="tab active" type="button">Billing</button>
-        <button id="tab-inventory" class="tab" type="button">Inventory Intake</button>
         <button id="tab-laundry" class="tab" type="button">Laundry</button>
         <button id="tab-assign" class="tab" type="button">Assign Items</button>
       </nav>
@@ -175,7 +174,7 @@
         </div>
       </section>
 
-      <section id="inventory-view" class="view">
+      <section id="inventory-view" class="view" hidden>
         <div class="card">
           <div class="card-head">
             <h2>Inventory Intake</h2>
@@ -370,7 +369,7 @@
               Stock
               <input id="assign-stock" class="text-input" type="number" min="0" step="1" placeholder="1" />
             </label>
-            <label>
+            <label hidden>
               Laundry Status
               <select id="assign-laundry-status" class="text-input">
                 <option>Ready</option>
@@ -379,7 +378,7 @@
                 <option>Dispatched</option>
               </select>
             </label>
-            <label class="wide-field">
+            <label class="wide-field" hidden>
               Notes
               <input id="assign-notes" class="text-input" placeholder="Prepared sample item" />
             </label>
