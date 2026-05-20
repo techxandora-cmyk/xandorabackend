@@ -26,6 +26,7 @@ const SESSION_IDLE_MS = Math.max(
   30 * 60 * 1000
 );
 const sharedAssignmentsByStore = new Map();
+const sharedZonesByStore = new Map();
 const assignmentStore = new AssignmentStore();
 
 if (!MAIN_API_URL) {
@@ -134,6 +135,29 @@ function getSharedAssignments(storeId) {
     sharedAssignmentsByStore.set(key, new Map());
   }
   return sharedAssignmentsByStore.get(key);
+}
+
+function getSharedZoneTracker(storeId) {
+  const key = normalizeStoreId(storeId);
+  if (!key) return null;
+  if (!sharedZonesByStore.has(key)) {
+    const zoneTracker = new ZoneTracker({ inZoneTimeoutMs: IN_ZONE_TIMEOUT_MS });
+    zoneTracker.subscribe((event) => {
+      if (event?.type === "live.exit" && event?.item?.epc) {
+        for (const session of sessions.values()) {
+          if (normalizeStoreId(session.selectedStoreId) !== key) continue;
+          session.state.recentLiveEpcs.delete(normalizeEpc(event.item.epc));
+        }
+      }
+      broadcastToStoreSessions(key, event);
+    });
+    sharedZonesByStore.set(key, zoneTracker);
+  }
+  return sharedZonesByStore.get(key);
+}
+
+function getSessionZoneTracker(session) {
+  return getSharedZoneTracker(session?.selectedStoreId) || session?.state?.zoneTracker;
 }
 
 function rememberSharedAssignment(storeId, item) {
@@ -435,7 +459,7 @@ async function ingestLiveScan(session, epc) {
   });
 
   if (item) {
-    session.state.zoneTracker.touch(toZoneItem(item), Date.now());
+    getSessionZoneTracker(session).touch(toZoneItem(item), Date.now());
   }
 
   broadcastToState(session.state, {
@@ -491,6 +515,10 @@ function mapLaundrySummary(items = []) {
 }
 
 function cleanupSessions() {
+  for (const zoneTracker of sharedZonesByStore.values()) {
+    zoneTracker.cleanup(Date.now());
+  }
+
   const cutoff = Date.now() - SESSION_IDLE_MS;
   for (const [sessionId, session] of sessions.entries()) {
     if (Number(session.lastSeenAt || 0) < cutoff) {
@@ -586,7 +614,7 @@ function startLiveBridge() {
               });
 
               if (cachedZoneItem) {
-                session.state.zoneTracker.touch(cachedZoneItem, Date.now());
+                getSessionZoneTracker(session).touch(cachedZoneItem, Date.now());
               }
 
               broadcastToState(session.state, {
@@ -607,7 +635,7 @@ function startLiveBridge() {
                   });
 
                   if (item) {
-                    session.state.zoneTracker.touch(toZoneItem(item), Date.now());
+                    getSessionZoneTracker(session).touch(toZoneItem(item), Date.now());
                   }
 
                   if (eventName === "scan") {
@@ -765,8 +793,9 @@ app.post("/api/demo/simulator/stop", (_req, res) =>
 
 app.post("/api/demo/clear-working-state", requireSession, (req, res) => {
   req.retailSession.state.cartStore.clear();
-  for (const item of req.retailSession.state.zoneTracker.list()) {
-    req.retailSession.state.zoneTracker.remove(item.epc, "manual", Date.now());
+  const zoneTracker = getSessionZoneTracker(req.retailSession);
+  for (const item of zoneTracker.list()) {
+    zoneTracker.remove(item.epc, "manual", Date.now());
   }
   req.retailSession.state.stocktakeStore.clear();
   return res.json({ ok: true, cleared: true });
@@ -789,8 +818,9 @@ app.get("/api/live/events", requireSession, (req, res) => {
 });
 
 app.get("/api/live/in-zone", requireSession, requireSelectedStore, (req, res) => {
-  req.retailSession.state.zoneTracker.cleanup(Date.now());
-  const items = req.retailSession.state.zoneTracker.list();
+  const zoneTracker = getSessionZoneTracker(req.retailSession);
+  zoneTracker.cleanup(Date.now());
+  const items = zoneTracker.list();
   return res.json({ items, count: items.length });
 });
 
@@ -813,7 +843,7 @@ app.post("/api/live/remove", requireSession, requireSelectedStore, (req, res) =>
   if (!epc) {
     return res.status(400).json({ ok: false, error: "epc is required" });
   }
-  const removed = req.retailSession.state.zoneTracker.remove(epc, "manual", Date.now());
+  const removed = getSessionZoneTracker(req.retailSession).remove(epc, "manual", Date.now());
   return res.json({ ok: true, removed });
 });
 
@@ -827,7 +857,8 @@ app.post("/api/pos/cart/add", requireSession, requireSelectedStore, async (req, 
     return res.status(400).json({ ok: false, error: "epc is required" });
   }
 
-  const liveItem = req.retailSession.state.zoneTracker.list().find((row) => row.epc === epc);
+  const zoneTracker = getSessionZoneTracker(req.retailSession);
+  const liveItem = zoneTracker.list().find((row) => row.epc === epc);
   const catalogItem = await lookupCatalogItem(req.retailSession, epc);
   const item = liveItem || (catalogItem ? toZoneItem(catalogItem) : null);
   if (!item) {
@@ -835,7 +866,7 @@ app.post("/api/pos/cart/add", requireSession, requireSelectedStore, async (req, 
   }
 
   const cart = req.retailSession.state.cartStore.add(item);
-  const removed = req.retailSession.state.zoneTracker.remove(epc, "cart", Date.now());
+  const removed = zoneTracker.remove(epc, "cart", Date.now());
   broadcastToState(req.retailSession.state, {
     type: "pos.cart.added",
     epc,
@@ -855,7 +886,7 @@ app.post("/api/pos/cart/remove", requireSession, (req, res) => {
   const cart = req.retailSession.state.cartStore.remove(epc);
   let restored = null;
   if (item) {
-    restored = req.retailSession.state.zoneTracker.touch(item, Date.now());
+    restored = getSessionZoneTracker(req.retailSession).touch(item, Date.now());
   }
   broadcastToState(req.retailSession.state, {
     type: "pos.cart.removed",
@@ -995,7 +1026,7 @@ app.get("/api/inventory/summary", requireSession, requireSelectedStore, async (r
   try {
     const items = await fetchAssignments(req.retailSession, 1000);
     const grouped = new Map();
-    const inZoneBySku = req.retailSession.state.zoneTracker.countBySku();
+    const inZoneBySku = getSessionZoneTracker(req.retailSession).countBySku();
     const stocktakeBySku = req.retailSession.state.stocktakeStore.countBySku();
 
     for (const item of items) {
@@ -1238,8 +1269,9 @@ app.get("/api/assignments/recent-epcs", requireSession, requireSelectedStore, as
     const byEpc = new Map();
     const state = req.retailSession.state;
 
-    state.zoneTracker.cleanup(Date.now());
-    for (const liveItem of state.zoneTracker.list()) {
+    const zoneTracker = getSessionZoneTracker(req.retailSession);
+    zoneTracker.cleanup(Date.now());
+    for (const liveItem of zoneTracker.list()) {
       const assignedItem = getCachedAssignment(req.retailSession, liveItem.epc);
       const epc = normalizeEpc(liveItem.epc);
       if (!epc) continue;
@@ -1342,6 +1374,7 @@ app.post("/api/assignments", requireSession, requireSelectedStore, async (req, r
     if (item.epc) {
       req.retailSession.state.savedAssignments.set(normalizeEpc(item.epc), item);
       rememberSharedAssignment(req.retailSession.selectedStoreId, item);
+      getSessionZoneTracker(req.retailSession).touch(toZoneItem(item), Date.now());
     }
     rememberRecentEpc(req.retailSession.state, item.epc, {
       source: "Assignment saved",
