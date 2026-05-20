@@ -1158,10 +1158,9 @@
         checkoutCartSnapshot.currency || "LKR"
       );
       refs.checkoutModalCopy.textContent =
-        "Sale recorded in Xandora. Print the bill for the customer, then return to billing.";
+        "Sale recorded in Xandora. Print the bill for the customer, then return to the bill.";
       refs.checkoutModal.hidden = false;
       refs.checkoutModalPrint.focus();
-      if (refs.printBillBtn) refs.printBillBtn.disabled = false;
       state.cart = result.cleared_cart || { items: [], count: 0, total: 0, currency: "LKR" };
       renderCart();
       await Promise.all([refreshInventory(), refreshRecentEpcs()]).catch(() => {});
@@ -1170,7 +1169,7 @@
       pushLog(`Checkout failed: ${err.message}`);
     } finally {
       refs.checkoutBtn.disabled = false;
-      refs.checkoutBtn.textContent = "Checkout / Payment";
+      refs.checkoutBtn.textContent = "Checkout";
     }
   }
 
@@ -1221,7 +1220,7 @@
       refs.checkoutModalDiscount.textContent = formatMoney(0, returnCart.currency);
       refs.checkoutModalTotal.textContent = formatMoney(result.total_amount, returnCart.currency);
       refs.checkoutModalCopy.textContent =
-        "Return recorded in Xandora. Print the return bill for the customer, then return to billing.";
+        "Return recorded in Xandora. Print the return bill for the customer, then return to the bill.";
       refs.checkoutModal.hidden = false;
       refs.checkoutModalPrint.focus();
       if (refs.printBillBtn) refs.printBillBtn.disabled = false;
@@ -1346,7 +1345,9 @@
     refs.refreshBtn.addEventListener("click", () => refreshActiveView());
     refs.laundryFilter.addEventListener("change", renderLaundry);
     refs.checkoutBtn.addEventListener("click", checkoutCart);
-    refs.printBillBtn.addEventListener("click", printLastReceipt);
+    if (refs.printBillBtn) {
+      refs.printBillBtn.addEventListener("click", printLastReceipt);
+    }
     refs.returnBtn.addEventListener("click", returnEpc);
     refs.applyDiscountBtn.addEventListener("click", applyDiscount);
     refs.discountValue.addEventListener("keydown", (evt) => {
