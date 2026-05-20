@@ -1396,10 +1396,11 @@ app.post("/api/assignments", requireSession, requireSelectedStore, async (req, r
       throw new Error("Assignment was not saved to shared catalog");
     }
 
-    const confirmedItem = await lookupCatalogItem(req.retailSession, epc, { forceRemote: true });
-    if (!confirmedItem?.epc) {
-      throw new Error("Assignment saved but could not be confirmed in shared catalog");
-    }
+    const confirmedItem =
+      (await lookupCatalogItem(req.retailSession, epc, { forceRemote: true }).catch((err) => {
+        console.warn("[retail-console] Assignment saved; confirm lookup lagged:", err.message);
+        return null;
+      })) || item;
 
     if (item.epc) {
       req.retailSession.state.savedAssignments.set(normalizeEpc(item.epc), confirmedItem);

@@ -43,7 +43,7 @@
         </div>
       </header>
 
-      <div class="intro-strip" hidden>
+      <div class="intro-strip" hidden aria-hidden="true" style="display: none !important;">
         <div class="intro-card">
           <div class="intro-card-num">01</div>
           <div class="intro-card-body">
@@ -366,7 +366,7 @@
               Stock
               <input id="assign-stock" class="text-input" type="number" min="0" step="1" placeholder="1" />
             </label>
-            <label hidden>
+            <label hidden aria-hidden="true" style="display: none !important;">
               Laundry Status
               <select id="assign-laundry-status" class="text-input">
                 <option>Ready</option>
@@ -375,7 +375,7 @@
                 <option>Dispatched</option>
               </select>
             </label>
-            <label class="wide-field" hidden>
+            <label class="wide-field" hidden aria-hidden="true" style="display: none !important;">
               Notes
               <input id="assign-notes" class="text-input" placeholder="Prepared sample item" />
             </label>
