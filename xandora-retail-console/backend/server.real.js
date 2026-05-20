@@ -479,9 +479,10 @@ async function lookupCatalogItem(session, epc, options = {}) {
       return item;
     }
   } catch (err) {
-    if (!savedAssignment) throw err;
+    if (options.forceRemote || !savedAssignment) throw err;
   }
 
+  if (options.forceRemote) return null;
   return savedAssignment || null;
 }
 
