@@ -7,9 +7,13 @@ function toNum(v) {
   return Number.isFinite(n) ? n : 0;
 }
 
+function normalizeStoreId(value) {
+  return String(value || "").trim().toUpperCase();
+}
+
 export default function Stock() {
   const [storeId, setStoreId] = useState(
-    () => localStorage.getItem("xandora_store_id") || "STORE_001"
+    () => normalizeStoreId(localStorage.getItem("xandora_store_id") || "STORE_001")
   );
 
   const [q, setQ] = useState("");
@@ -39,7 +43,7 @@ export default function Stock() {
       const qValue = String(overrides.q ?? q).trim();
       const brandValue = String(overrides.brand ?? brand).trim();
       const barcodeValue = String(overrides.barcode ?? barcode).trim();
-      const sid = String(overrides.store_id || storeId);
+      const sid = normalizeStoreId(overrides.store_id || storeId);
 
       setLoading(true);
       setError("");
@@ -88,7 +92,7 @@ export default function Stock() {
 
   useEffect(() => {
     function onStoreChanged() {
-      const sid = localStorage.getItem("xandora_store_id") || "STORE_001";
+      const sid = normalizeStoreId(localStorage.getItem("xandora_store_id") || "STORE_001");
       setStoreId(sid);
     }
 

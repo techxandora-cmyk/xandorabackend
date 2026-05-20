@@ -3,6 +3,7 @@
   const SESSION_STORAGE_KEY = "xandora_retail_console_session";
   const REMEMBERED_EMAIL_KEY = "xandora_retail_console_email";
   const THEME_STORAGE_KEY = "xandora_retail_console_theme";
+  const RECENT_BILLS_STORAGE_KEY = "xandora_retail_console_recent_bills";
   const LIVE_BIN_MAX_AGE_SEC = 30;
 
   const state = {
@@ -16,6 +17,7 @@
     authMode: "login",
     cart: { items: [], count: 0, total: 0, currency: "LKR" },
     lastReceipt: null,
+    recentBills: [],
     inZone: [],
     inventory: [],
     stocktake: { items: [], summary: { uniqueEpcs: 0, totalScanEvents: 0 } },
@@ -56,6 +58,7 @@
     },
     inZoneBody: $("in-zone-body"),
     cartBody: $("cart-body"),
+    recentBillsBody: $("recent-bills-body"),
     inventoryBody: $("inventory-body"),
     stocktakeBody: $("stocktake-body"),
     laundryBody: $("laundry-body"),
@@ -639,6 +642,57 @@
     `;
   }
 
+  function loadRecentBills() {
+    try {
+      const rows = JSON.parse(localStorage.getItem(RECENT_BILLS_STORAGE_KEY) || "[]");
+      state.recentBills = Array.isArray(rows)
+        ? rows.map((row) => ({
+            ...row,
+            issuedAt: row.issuedAt ? new Date(row.issuedAt) : new Date(),
+          }))
+        : [];
+    } catch (_err) {
+      state.recentBills = [];
+    }
+  }
+
+  function saveRecentBills() {
+    localStorage.setItem(RECENT_BILLS_STORAGE_KEY, JSON.stringify(state.recentBills.slice(0, 20)));
+  }
+
+  function addRecentBill(receipt) {
+    if (!receipt?.receiptNo) return;
+    state.recentBills = [
+      receipt,
+      ...state.recentBills.filter((row) => row.receiptNo !== receipt.receiptNo),
+    ].slice(0, 20);
+    saveRecentBills();
+    renderRecentBills();
+  }
+
+  function renderRecentBills() {
+    if (!refs.recentBillsBody) return;
+    if (!state.recentBills.length) {
+      refs.recentBillsBody.innerHTML = `<tr><td colspan="5" class="empty-row">No recent bills yet</td></tr>`;
+      return;
+    }
+
+    refs.recentBillsBody.innerHTML = state.recentBills
+      .map(
+        (receipt) => `
+      <tr>
+        <td class="mono">${escapeHtml(receipt.receiptNo)}</td>
+        <td>${escapeHtml(receipt.type || "SALE")}</td>
+        <td>${receipt.count || 0}</td>
+        <td>${formatMoney(receipt.total, receipt.currency || "LKR")}</td>
+        <td>
+          <button class="btn btn-small btn-outline action-reprint-bill" data-receipt="${escapeHtml(receipt.receiptNo)}" type="button">Print</button>
+        </td>
+      </tr>`
+      )
+      .join("");
+  }
+
   async function printLastReceipt() {
     if (!state.lastReceipt) {
       pushLog("Print blocked: no completed bill is ready");
@@ -1070,6 +1124,21 @@
             state.inZone = upsertByEpc(state.inZone, data.item);
             renderInZone();
           }
+          if (type === "pos.checkout.completed" && Array.isArray(data.items)) {
+            for (const item of data.items) {
+              state.inZone = upsertByEpc(state.inZone, {
+                ...item,
+                saleStatus: "SOLD",
+                returnOnly: true,
+                lastSeenAt: data.at || Date.now(),
+              });
+            }
+            renderInZone();
+          }
+          if (type === "pos.return.completed" && data.epc) {
+            state.inZone = state.inZone.filter((item) => item.epc !== data.epc);
+            renderInZone();
+          }
           if (type === "assignment.saved" && data.item) {
             state.assignments = upsertByEpc(state.assignments, data.item);
             state.inZone = upsertByEpc(state.inZone, {
@@ -1160,6 +1229,7 @@
       };
       const result = await apiPost("/api/pos/cart/checkout");
       state.lastReceipt = buildReceiptSnapshot(result, checkoutCartSnapshot);
+      addRecentBill(state.lastReceipt);
       renderReceipt(state.lastReceipt);
       refs.checkoutModalCount.textContent = String(result.items_count || 0);
       refs.checkoutModalSubtotal.textContent = formatMoney(
@@ -1178,7 +1248,16 @@
         "Sale recorded in Xandora. Print the bill for the customer, then return to the bill.";
       refs.checkoutModal.hidden = false;
       refs.checkoutModalPrint.focus();
+      for (const item of checkoutCartSnapshot.items) {
+        state.inZone = upsertByEpc(state.inZone, {
+          ...item,
+          saleStatus: "SOLD",
+          returnOnly: true,
+          lastSeenAt: Date.now(),
+        });
+      }
       state.cart = result.cleared_cart || { items: [], count: 0, total: 0, currency: "LKR" };
+      renderInZone();
       renderCart();
       await Promise.all([refreshRecentEpcs(), refreshInZone()]).catch(() => {});
       pushLog(`Checkout completed: ${result.items_count || 0} item(s)`);
@@ -1233,6 +1312,7 @@
         { ...result, receipt_type: "RETURN", subtotal_amount: returnCart.subtotal },
         returnCart
       );
+      addRecentBill(state.lastReceipt);
       renderReceipt(state.lastReceipt);
       refs.checkoutModalCount.textContent = String(result.items_count || 1);
       refs.checkoutModalSubtotal.textContent = formatMoney(returnCart.subtotal, returnCart.currency);
@@ -1608,6 +1688,19 @@
       }
     });
 
+    if (refs.recentBillsBody) {
+      refs.recentBillsBody.addEventListener("click", async (evt) => {
+        const printBtn = evt.target.closest(".action-reprint-bill");
+        if (!printBtn) return;
+        const receiptNo = printBtn.getAttribute("data-receipt");
+        const receipt = state.recentBills.find((row) => row.receiptNo === receiptNo);
+        if (!receipt) return;
+        state.lastReceipt = receipt;
+        renderReceipt(state.lastReceipt);
+        await printLastReceipt();
+      });
+    }
+
     refs.assignmentsBody.addEventListener("click", (evt) => {
       const row = evt.target.closest(".assignment-row");
       if (!row) return;
@@ -1651,6 +1744,8 @@
 
   async function init() {
     setTheme(state.theme);
+    loadRecentBills();
+    renderRecentBills();
     bindUi();
     activateTab("billing");
     const restored = await restoreSession();

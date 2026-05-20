@@ -179,6 +179,30 @@ function isSoldEpc(storeId, epc) {
   return getSoldEpcs(storeId).has(normalizeEpc(epc));
 }
 
+async function refreshSoldEpcCache(session, epcs = []) {
+  const wanted = new Set(epcs.map(normalizeEpc).filter(Boolean));
+  if (!session?.selectedStoreId || !wanted.size) return new Set();
+
+  try {
+    const body = await authorizedFetch(
+      session,
+      "retail",
+      `/api/v1/pos/cart-items?store_id=${encodeURIComponent(session.selectedStoreId)}&limit=1000&minutes=10080`
+    );
+    for (const row of Array.isArray(body?.items) ? body.items : []) {
+      const epc = normalizeEpc(row?.epc);
+      if (!wanted.has(epc)) continue;
+      if (row?.sold_before || row?.validation_status === "ALREADY_BILLED") {
+        markSoldEpc(session.selectedStoreId, epc);
+      }
+    }
+  } catch (err) {
+    console.warn("[retail-console] Sold EPC status lookup failed:", err.message);
+  }
+
+  return new Set([...wanted].filter((epc) => isSoldEpc(session.selectedStoreId, epc)));
+}
+
 function getSessionZoneTracker(session) {
   return getSharedZoneTracker(session?.selectedStoreId) || session?.state?.zoneTracker;
 }
@@ -861,7 +885,7 @@ app.get("/api/live/events", requireSession, (req, res) => {
   req.on("close", () => req.retailSession.state.sseClients.delete(res));
 });
 
-app.get("/api/live/in-zone", requireSession, requireSelectedStore, (req, res) => {
+app.get("/api/live/in-zone", requireSession, requireSelectedStore, async (req, res) => {
   const zoneTracker = getSessionZoneTracker(req.retailSession);
   zoneTracker.cleanup(Date.now());
   const cartEpcs = new Set(
@@ -870,7 +894,14 @@ app.get("/api/live/in-zone", requireSession, requireSelectedStore, (req, res) =>
       .items.map((item) => normalizeEpc(item.epc))
       .filter(Boolean)
   );
-  const items = zoneTracker.list().filter((item) => !cartEpcs.has(normalizeEpc(item.epc)));
+  const liveItems = zoneTracker.list().filter((item) => !cartEpcs.has(normalizeEpc(item.epc)));
+  const soldEpcs = await refreshSoldEpcCache(
+    req.retailSession,
+    liveItems.map((item) => item.epc)
+  );
+  const items = liveItems.map((item) =>
+    soldEpcs.has(normalizeEpc(item.epc)) ? toReturnableZoneItem(item, item.epc) : item
+  );
   return res.json({ items, count: items.length });
 });
 
