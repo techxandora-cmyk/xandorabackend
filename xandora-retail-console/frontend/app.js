@@ -1014,7 +1014,7 @@
     if (state.catalogSyncTimer) {
       clearInterval(state.catalogSyncTimer);
     }
-    state.catalogSyncTimer = setInterval(syncSharedCatalog, 5000);
+    state.catalogSyncTimer = setInterval(syncSharedCatalog, 1500);
   }
 
   function startLiveBinPrune() {
@@ -1232,6 +1232,12 @@
     for (const [name, view] of Object.entries(refs.views)) {
       if (!view) continue;
       view.classList.toggle("active", name === tabName);
+    }
+    if (tabName === "assign") {
+      Promise.all([refreshAssignments(), refreshRecentEpcs()]).catch(() => {});
+    }
+    if (tabName === "inventory") {
+      Promise.all([refreshInventory(), refreshStocktake()]).catch(() => {});
     }
   }
 

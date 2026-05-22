@@ -613,6 +613,45 @@ module.exports = function buildCatalogRoutes(pool) {
 
       await client.query("COMMIT");
 
+      const verifyResult = await pool.query(
+        `
+        SELECT
+          store_id,
+          epc,
+          sku,
+          product_name,
+          brand,
+          category,
+          size_label,
+          color,
+          price_lkr,
+          metadata,
+          updated_at,
+          ${BARCODE_SQL} AS barcode
+        FROM catalog_items
+        WHERE UPPER(store_id) = UPPER($1)
+          AND epc = $2
+          AND ${REAL_CATALOG_ROW_SQL}
+        LIMIT 1
+        `,
+        [store_id, epc]
+      );
+
+      if (!verifyResult.rowCount) {
+        console.error("[catalog/upsert-item] verification failed after commit", {
+          store_id,
+          epc,
+          sku,
+          product_name,
+        });
+        return res.status(500).json({
+          ok: false,
+          error: "Catalog item save was not visible after commit",
+          store_id,
+          epc,
+        });
+      }
+
       const broadcast = req.app.locals.broadcastEvent;
       if (typeof broadcast === "function") {
         const eventPayload = {
