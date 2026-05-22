@@ -71,6 +71,18 @@ class AssignmentStore {
     this.save();
     return next;
   }
+
+  delete(storeId, epc) {
+    const normalizedStoreId = normalizeStoreId(storeId);
+    const normalizedEpc = normalizeEpc(epc);
+    const storeRows = this.itemsByStore.get(normalizedStoreId);
+    if (!storeRows || !normalizedEpc) return false;
+    const removed = storeRows.delete(normalizedEpc);
+    if (removed) {
+      this.save();
+    }
+    return removed;
+  }
 }
 
 module.exports = {

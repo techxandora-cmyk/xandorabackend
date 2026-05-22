@@ -221,6 +221,15 @@ function rememberSharedAssignment(storeId, item) {
   return next;
 }
 
+function removeSharedAssignment(storeId, epc) {
+  const normalizedStoreId = normalizeStoreId(storeId);
+  const normalizedEpc = normalizeEpc(epc);
+  if (!normalizedStoreId || !normalizedEpc) return false;
+  getSharedAssignments(normalizedStoreId).delete(normalizedEpc);
+  assignmentStore.delete(normalizedStoreId, normalizedEpc);
+  return true;
+}
+
 function getCachedAssignment(session, epc) {
   const normalized = normalizeEpc(epc);
   if (!session || !normalized) return null;
@@ -696,6 +705,19 @@ function startLiveBridge() {
               if (!epc) continue;
               const itemInCart = Boolean(session.state.cartStore.get(epc));
               const itemSold = isSoldEpc(session.selectedStoreId, epc);
+
+              if (eventName === "catalog_item_deleted") {
+                session.state.savedAssignments.delete(epc);
+                session.state.recentLiveEpcs.delete(epc);
+                removeSharedAssignment(session.selectedStoreId, epc);
+                getSessionZoneTracker(session)?.remove?.(epc, "catalog_deleted", Date.now());
+                broadcastToState(session.state, {
+                  type: "assignment.deleted",
+                  epc,
+                  at: Date.now(),
+                });
+                continue;
+              }
 
               const cachedItem = getCachedAssignment(session, epc);
               const cachedZoneItem = !itemInCart && cachedItem

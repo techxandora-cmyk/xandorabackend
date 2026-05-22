@@ -1,4 +1,4 @@
-﻿import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
+﻿import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { apiDelete, apiGet } from "@/lib/api";
 import { buildEventsStreamUrl } from "@/config/api";
 
@@ -9,6 +9,113 @@ function toNum(v) {
 
 function normalizeStoreId(value) {
   return String(value || "").trim().toUpperCase();
+}
+
+const DEV_STOCK_FIXTURES = {
+  DEHIWALA_01: [
+    {
+      group_key: "fixture:barcode:8901122334455",
+      barcode: "8901122334455",
+      sku: "TSHIRT-001",
+      product_name: "Classic Tee",
+      brand: "Xandora Basics",
+      category: "Topwear",
+      size_label: "M",
+      color: "Black",
+      total_tags: 3,
+      in_stock_count: 2,
+      sold_count: 1,
+      returned_count: 0,
+    },
+    {
+      group_key: "fixture:barcode:8901122334462",
+      barcode: "8901122334462",
+      sku: "DENIM-002",
+      product_name: "Slim Denim",
+      brand: "Xandora Blue",
+      category: "Bottomwear",
+      size_label: "32",
+      color: "Indigo",
+      total_tags: 2,
+      in_stock_count: 1,
+      sold_count: 0,
+      returned_count: 1,
+    },
+  ],
+};
+
+const DEV_STOCK_DETAILS = {
+  "fixture:barcode:8901122334455": {
+    summary: {
+      total_tags: 3,
+      in_stock_tags: 2,
+      sold_tags: 1,
+      returned_tags: 0,
+    },
+    items: [
+      {
+        epc: "DEV-EPC-TSHIRT-001",
+        stock_state: "IN_STOCK",
+        sold_balance: 0,
+        return_events: 0,
+        price_lkr: 3900,
+      },
+      {
+        epc: "DEV-EPC-TSHIRT-002",
+        stock_state: "IN_STOCK",
+        sold_balance: 0,
+        return_events: 0,
+        price_lkr: 3900,
+      },
+      {
+        epc: "DEV-EPC-TSHIRT-003",
+        stock_state: "SOLD",
+        sold_balance: 1,
+        return_events: 0,
+        price_lkr: 3900,
+      },
+    ],
+  },
+  "fixture:barcode:8901122334462": {
+    summary: {
+      total_tags: 2,
+      in_stock_tags: 1,
+      sold_tags: 0,
+      returned_tags: 1,
+    },
+    items: [
+      {
+        epc: "DEV-EPC-DENIM-001",
+        stock_state: "IN_STOCK",
+        sold_balance: 0,
+        return_events: 0,
+        price_lkr: 6200,
+      },
+      {
+        epc: "DEV-EPC-DENIM-002",
+        stock_state: "RETURNED",
+        sold_balance: 0,
+        return_events: 1,
+        price_lkr: 6200,
+      },
+    ],
+  },
+};
+
+function isLocalStockFixtureMode() {
+  return Boolean(import.meta?.env?.DEV) && typeof window !== "undefined";
+}
+
+function getDevFixtureRows(storeId) {
+  return DEV_STOCK_FIXTURES[normalizeStoreId(storeId)] || [];
+}
+
+function getDevFixtureDetails(groupKey) {
+  return DEV_STOCK_DETAILS[groupKey] || null;
+}
+
+function isDevFixtureEpc(epc) {
+  return String(epc || "").toUpperCase().startsWith("DEV-EPC-");
 }
 
 export default function Stock() {
@@ -37,6 +144,22 @@ export default function Stock() {
   const [detailsByGroup, setDetailsByGroup] = useState({});
   const [message, setMessage] = useState("");
   const [deletingEpc, setDeletingEpc] = useState("");
+  const pendingAutoRefreshRef = useRef(false);
+  const expandedGroupKeyRef = useRef("");
+  const detailLoadingKeyRef = useRef("");
+  const deletingEpcRef = useRef("");
+
+  useEffect(() => {
+    expandedGroupKeyRef.current = expandedGroupKey;
+  }, [expandedGroupKey]);
+
+  useEffect(() => {
+    detailLoadingKeyRef.current = detailLoadingKey;
+  }, [detailLoadingKey]);
+
+  useEffect(() => {
+    deletingEpcRef.current = deletingEpc;
+  }, [deletingEpc]);
 
   const loadStock = useCallback(
     async (overrides = {}) => {
@@ -44,6 +167,7 @@ export default function Stock() {
       const brandValue = String(overrides.brand ?? brand).trim();
       const barcodeValue = String(overrides.barcode ?? barcode).trim();
       const sid = normalizeStoreId(overrides.store_id || storeId);
+      const preserveDetails = Boolean(overrides.preserveDetails);
 
       setLoading(true);
       setError("");
@@ -59,17 +183,22 @@ export default function Stock() {
         if (barcodeValue) params.set("barcode", barcodeValue);
 
         const res = await apiGet(`/stock/search?${params.toString()}`);
+        const apiRows = Array.isArray(res?.items) ? res.items : [];
+        const nextRows =
+          apiRows.length === 0 && isLocalStockFixtureMode() ? getDevFixtureRows(sid) : apiRows;
 
-        setRows(Array.isArray(res?.items) ? res.items : []);
+        setRows(nextRows);
         setLastFilters({
           q: qValue || null,
           brand: brandValue || null,
           barcode: barcodeValue || null,
         });
-        setExpandedGroupKey("");
-        setDetailLoadingKey("");
-        setDetailError("");
-        setDetailsByGroup({});
+        if (!preserveDetails) {
+          setExpandedGroupKey("");
+          setDetailLoadingKey("");
+          setDetailError("");
+          setDetailsByGroup({});
+        }
       } catch (e) {
         console.error("[Stock] load failed:", e);
         if (e?.status === 404) {
@@ -120,9 +249,17 @@ export default function Stock() {
 
     function scheduleRefresh(event) {
       if (!sameStore(event)) return;
+      if (
+        expandedGroupKeyRef.current ||
+        detailLoadingKeyRef.current ||
+        deletingEpcRef.current
+      ) {
+        pendingAutoRefreshRef.current = true;
+        return;
+      }
       window.clearTimeout(refreshTimer);
       refreshTimer = window.setTimeout(() => {
-        loadStock();
+        loadStock({ preserveDetails: true });
       }, 100);
     }
 
@@ -133,7 +270,15 @@ export default function Stock() {
     eventSource.addEventListener("pos_return", scheduleRefresh);
     const fallbackTimer = window.setInterval(() => {
       if (document.visibilityState === "visible") {
-        loadStock();
+        if (
+          expandedGroupKeyRef.current ||
+          detailLoadingKeyRef.current ||
+          deletingEpcRef.current
+        ) {
+          pendingAutoRefreshRef.current = true;
+          return;
+        }
+        loadStock({ preserveDetails: true });
       }
     }, 3000);
 
@@ -143,6 +288,13 @@ export default function Stock() {
       eventSource.close();
     };
   }, [loadStock, storeId]);
+
+  useEffect(() => {
+    if (expandedGroupKey || detailLoadingKey || deletingEpc) return;
+    if (!pendingAutoRefreshRef.current) return;
+    pendingAutoRefreshRef.current = false;
+    loadStock({ preserveDetails: true });
+  }, [expandedGroupKey, detailLoadingKey, deletingEpc, loadStock]);
 
   function onSubmit(e) {
     e.preventDefault();
@@ -285,6 +437,19 @@ export default function Stock() {
     setDetailLoadingKey(groupKey);
     setDetailError("");
     try {
+      const fixtureDetails = getDevFixtureDetails(groupKey);
+      if (fixtureDetails) {
+        setDetailsByGroup((prev) => ({
+          ...prev,
+          [groupKey]: {
+            summary: fixtureDetails.summary,
+            items: fixtureDetails.items,
+            count: fixtureDetails.items.length,
+          },
+        }));
+        return;
+      }
+
       const params = new URLSearchParams({
         store_id: storeId,
         group_key: groupKey,
@@ -344,14 +509,18 @@ export default function Stock() {
     setMessage("");
 
     try {
-      await apiDelete(
-        `/stock/epcs/${encodeURIComponent(normalized)}?store_id=${encodeURIComponent(storeId)}`
-      );
+      if (!isDevFixtureEpc(normalized)) {
+        await apiDelete(
+          `/stock/epcs/${encodeURIComponent(normalized)}?store_id=${encodeURIComponent(storeId)}`
+        );
+      }
 
+      let nextGroupItems = null;
       setDetailsByGroup((prev) => {
         const current = prev[groupKey];
         if (!current) return prev;
         const items = (current.items || []).filter((item) => item.epc !== normalized);
+        nextGroupItems = items;
         const summary = items.reduce(
           (acc, item) => {
             acc.total_tags += 1;
@@ -379,8 +548,54 @@ export default function Stock() {
         };
       });
 
-      setMessage(`Deleted EPC ${normalized} from stock.`);
-      await loadStock();
+      setRows((prev) =>
+        (Array.isArray(prev) ? prev : []).flatMap((row, idx) => {
+          const key = rowGroupKey(row, idx);
+          if (key !== groupKey) return [row];
+
+          const inStockCount = Array.isArray(nextGroupItems)
+            ? nextGroupItems.filter((item) => item.stock_state === "IN_STOCK").length
+            : Math.max(toNum(row?.in_stock_count) - 1, 0);
+          const soldCount = Array.isArray(nextGroupItems)
+            ? nextGroupItems.filter((item) => item.stock_state === "SOLD").length
+            : toNum(row?.sold_count);
+          const returnedCount = Array.isArray(nextGroupItems)
+            ? nextGroupItems.filter((item) => item.stock_state === "RETURNED").length
+            : toNum(row?.returned_count);
+          const totalTags = Array.isArray(nextGroupItems)
+            ? nextGroupItems.length
+            : Math.max(toNum(row?.total_tags) - 1, 0);
+
+          if (totalTags <= 0) {
+            return [];
+          }
+
+          return [
+            {
+              ...row,
+              total_tags: totalTags,
+              in_stock_count: inStockCount,
+              sold_count: soldCount,
+              returned_count: returnedCount,
+            },
+          ];
+        })
+      );
+
+      if (Array.isArray(nextGroupItems) && nextGroupItems.length === 0) {
+        setExpandedGroupKey((prev) => (prev === groupKey ? "" : prev));
+      }
+
+      const localFixtureDelete = isDevFixtureEpc(normalized);
+      setMessage(
+        localFixtureDelete
+          ? `Deleted demo EPC ${normalized} locally.`
+          : `Deleted EPC ${normalized} from stock.`
+      );
+      pendingAutoRefreshRef.current = false;
+      if (!localFixtureDelete) {
+        await loadStock({ preserveDetails: true });
+      }
     } catch (e) {
       setError(e?.message || "Failed to delete stock EPC");
     } finally {

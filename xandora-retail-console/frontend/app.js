@@ -761,6 +761,12 @@
     return [item, ...filtered];
   }
 
+  function removeByEpc(rows, epc) {
+    const normalized = String(epc || "").toUpperCase();
+    if (!normalized) return rows;
+    return (Array.isArray(rows) ? rows : []).filter((row) => row?.epc !== normalized);
+  }
+
   function upsertStocktakeRow(row = {}) {
     const epc = String(row.epc || "").toUpperCase();
     if (!epc) return;
@@ -1178,6 +1184,17 @@
               assigned: true,
               item: data.item,
             });
+          }
+          if (type === "assignment.deleted" && data.epc) {
+            state.assignments = removeByEpc(state.assignments, data.epc);
+            state.inZone = removeByEpc(state.inZone, data.epc);
+            removeRecentEpc(data.epc);
+            renderAssignments();
+            renderRecentAssigned();
+            renderInZone();
+            if (String(refs.assignEpc?.value || "").trim().toUpperCase() === data.epc) {
+              refs.assignmentForm.reset();
+            }
           }
           const refreshScope = type.startsWith("pos.")
             ? "pos"
