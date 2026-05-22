@@ -676,6 +676,7 @@ module.exports = function buildStockRoutes(pool) {
           size_label,
           color,
           price_lkr,
+          metadata,
           COALESCE(
             NULLIF(TRIM(metadata->>'barcode'), ''),
             NULLIF(TRIM(metadata->>'upc'), ''),
@@ -713,39 +714,6 @@ module.exports = function buildStockRoutes(pool) {
       });
 
       await client.query("COMMIT");
-
-      let verifyCount = 0;
-      for (let attempt = 0; attempt < 4; attempt += 1) {
-        const verifyResult = await client.query(
-          `
-          SELECT COUNT(*)::int AS remaining
-          FROM catalog_items
-          WHERE UPPER(store_id) = UPPER($1)
-            AND epc = $2
-            AND LOWER(COALESCE(metadata->>'deleted', 'false')) <> 'true'
-          `,
-          [store_id, epc]
-        );
-        verifyCount = Number(verifyResult.rows[0]?.remaining || 0);
-        if (verifyCount === 0) break;
-        if (attempt < 3) {
-          await wait(150 * (attempt + 1));
-        }
-      }
-
-      if (verifyCount > 0) {
-        console.error("[stock/delete-epc] verification failed after commit", {
-          store_id,
-          epc,
-          remaining: verifyCount,
-        });
-        return res.status(500).json({
-          ok: false,
-          error: "Stock EPC delete was not visible after commit",
-          store_id,
-          epc,
-        });
-      }
 
       const broadcast = req.app.locals.broadcastEvent;
       if (typeof broadcast === "function") {
