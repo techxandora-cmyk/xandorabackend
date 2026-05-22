@@ -38,6 +38,10 @@ function createActionRef(prefix) {
     .toUpperCase()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
 }
 
+function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 function actorFromRequest(req) {
   return {
     actor_user_id: Number(req.user?.user_id) || null,
@@ -613,8 +617,7 @@ module.exports = function buildCatalogRoutes(pool) {
 
       await client.query("COMMIT");
 
-      const verifyResult = await pool.query(
-        `
+      const verifySql = `
         SELECT
           store_id,
           epc,
@@ -633,9 +636,15 @@ module.exports = function buildCatalogRoutes(pool) {
           AND epc = $2
           AND ${REAL_CATALOG_ROW_SQL}
         LIMIT 1
-        `,
-        [store_id, epc]
-      );
+      `;
+      let verifyResult = { rowCount: 0, rows: [] };
+      for (let attempt = 0; attempt < 4; attempt += 1) {
+        verifyResult = await client.query(verifySql, [store_id, epc]);
+        if (verifyResult.rowCount) break;
+        if (attempt < 3) {
+          await wait(150 * (attempt + 1));
+        }
+      }
 
       if (!verifyResult.rowCount) {
         console.error("[catalog/upsert-item] verification failed after commit", {
@@ -643,6 +652,7 @@ module.exports = function buildCatalogRoutes(pool) {
           epc,
           sku,
           product_name,
+          upsert_row: upsertResult.rows[0] || null,
         });
         return res.status(500).json({
           ok: false,
