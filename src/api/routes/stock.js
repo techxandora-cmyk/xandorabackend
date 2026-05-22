@@ -660,7 +660,7 @@ module.exports = function buildStockRoutes(pool) {
             || jsonb_build_object(
               'deleted', true,
               'deleted_at', NOW()::text,
-              'deleted_by', $3
+              'deleted_by', $3::text
             ),
           updated_at = NOW()
         WHERE UPPER(store_id) = UPPER($1)
