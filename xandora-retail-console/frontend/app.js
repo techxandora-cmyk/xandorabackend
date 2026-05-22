@@ -1188,7 +1188,14 @@
           if (type === "assignment.deleted" && data.epc) {
             state.assignments = removeByEpc(state.assignments, data.epc);
             state.inZone = removeByEpc(state.inZone, data.epc);
-            removeRecentEpc(data.epc);
+            upsertRecentEpc({
+              epc: data.epc,
+              source: "Stock deleted",
+              seenAt: data.at || Date.now(),
+              seenAtIso: new Date(data.at || Date.now()).toISOString(),
+              assigned: false,
+              item: null,
+            });
             renderAssignments();
             renderRecentAssigned();
             renderInZone();

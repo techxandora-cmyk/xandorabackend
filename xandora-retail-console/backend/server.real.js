@@ -708,9 +708,13 @@ function startLiveBridge() {
 
               if (eventName === "catalog_item_deleted") {
                 session.state.savedAssignments.delete(epc);
-                session.state.recentLiveEpcs.delete(epc);
                 removeSharedAssignment(session.selectedStoreId, epc);
                 getSessionZoneTracker(session)?.remove?.(epc, "catalog_deleted", Date.now());
+                rememberRecentEpc(session.state, epc, {
+                  source: "Stock deleted",
+                  assigned: false,
+                  item: null,
+                });
                 broadcastToState(session.state, {
                   type: "assignment.deleted",
                   epc,

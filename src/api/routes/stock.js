@@ -13,6 +13,11 @@ const BARCODE_SQL = `
   )
 `;
 
+const ACTIVE_CATALOG_ROW_SQL = `
+  LOWER(COALESCE(c.metadata->>'auto_mapped', 'false')) <> 'true'
+  AND LOWER(COALESCE(c.metadata->>'deleted', 'false')) <> 'true'
+`;
+
 const GROUP_KEY_SQL = `
   md5(
     concat_ws(
@@ -121,6 +126,7 @@ module.exports = function buildStockRoutes(pool) {
           ${BARCODE_SQL} AS barcode
         FROM catalog_items c
         WHERE ${whereSql}
+          AND ${ACTIVE_CATALOG_ROW_SQL}
       ),
       epc_states AS (
         SELECT
@@ -173,6 +179,7 @@ module.exports = function buildStockRoutes(pool) {
           ${BARCODE_SQL} AS barcode
         FROM catalog_items c
         WHERE ${whereSql}
+          AND ${ACTIVE_CATALOG_ROW_SQL}
       ),
       epc_states AS (
         SELECT
@@ -299,6 +306,7 @@ module.exports = function buildStockRoutes(pool) {
         FROM catalog_items c
         LEFT JOIN epc_states es ON es.epc = c.epc
         WHERE ${whereSql}
+          AND ${ACTIVE_CATALOG_ROW_SQL}
         GROUP BY
           c.store_id,
           ${BARCODE_SQL},
@@ -487,6 +495,7 @@ module.exports = function buildStockRoutes(pool) {
           FROM catalog_items c
           WHERE UPPER(c.store_id) = UPPER($1)
             AND c.epc = $2
+            AND ${ACTIVE_CATALOG_ROW_SQL}
           ORDER BY updated_at DESC
           LIMIT 10
           `,
@@ -645,9 +654,18 @@ module.exports = function buildStockRoutes(pool) {
 
       const deletedResult = await client.query(
         `
-        DELETE FROM catalog_items
+        UPDATE catalog_items
+        SET
+          metadata = COALESCE(metadata, '{}'::jsonb)
+            || jsonb_build_object(
+              'deleted', true,
+              'deleted_at', NOW()::text,
+              'deleted_by', $3
+            ),
+          updated_at = NOW()
         WHERE UPPER(store_id) = UPPER($1)
           AND epc = $2
+          AND LOWER(COALESCE(metadata->>'deleted', 'false')) <> 'true'
         RETURNING
           store_id,
           epc,
@@ -666,7 +684,7 @@ module.exports = function buildStockRoutes(pool) {
             NULLIF(TRIM(metadata->>'bar_code'), '')
           ) AS barcode
         `,
-        [store_id, epc]
+        [store_id, epc, String(req.user?.email || req.user?.user_id || "unknown")]
       );
 
       if (!deletedResult.rowCount) {
@@ -704,6 +722,7 @@ module.exports = function buildStockRoutes(pool) {
           FROM catalog_items
           WHERE UPPER(store_id) = UPPER($1)
             AND epc = $2
+            AND LOWER(COALESCE(metadata->>'deleted', 'false')) <> 'true'
           `,
           [store_id, epc]
         );

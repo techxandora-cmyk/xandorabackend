@@ -12,7 +12,10 @@ const BARCODE_SQL = `
     NULLIF(TRIM(metadata->>'bar_code'), '')
   )
 `;
-const REAL_CATALOG_ROW_SQL = `LOWER(COALESCE(metadata->>'auto_mapped', 'false')) <> 'true'`;
+const REAL_CATALOG_ROW_SQL = `
+  LOWER(COALESCE(metadata->>'auto_mapped', 'false')) <> 'true'
+  AND LOWER(COALESCE(metadata->>'deleted', 'false')) <> 'true'
+`;
 
 function normalizeEpc(v) {
   return String(v || "").trim().toUpperCase();
@@ -528,6 +531,7 @@ module.exports = function buildCatalogRoutes(pool) {
       // so it becomes visible across catalog, stock, POS, and assignment views.
       const metadata = {
         auto_mapped: false,
+        deleted: false,
         ...(barcode ? { barcode } : {}),
         ...(bin ? { bin } : {}),
         ...(notes ? { notes } : {}),
@@ -562,7 +566,7 @@ module.exports = function buildCatalogRoutes(pool) {
           size_label = EXCLUDED.size_label,
           color = EXCLUDED.color,
           price_lkr = EXCLUDED.price_lkr,
-          metadata = (COALESCE(catalog_items.metadata, '{}'::jsonb) - 'auto_mapped') || EXCLUDED.metadata,
+          metadata = ((((COALESCE(catalog_items.metadata, '{}'::jsonb) - 'auto_mapped') - 'deleted') - 'deleted_at') - 'deleted_by') || EXCLUDED.metadata,
           updated_at = NOW()
         RETURNING
           store_id,

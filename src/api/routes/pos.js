@@ -294,6 +294,7 @@ router.get("/cart-items", authenticate, async (req, res) => {
             ON c.store_id = $1
            AND c.epc = s.tag
            AND LOWER(COALESCE(c.metadata->>'auto_mapped', 'false')) <> 'true'
+           AND LOWER(COALESCE(c.metadata->>'deleted', 'false')) <> 'true'
           WHERE s.store_id = $1
             AND COALESCE(s.last_seen, s.ts) >= NOW() - ($3::int * INTERVAL '1 minute')
           GROUP BY
