@@ -114,6 +114,7 @@
     checkoutModalDiscount: $("checkout-modal-discount"),
     checkoutModalTotal: $("checkout-modal-total"),
     checkoutModalCopy: $("checkout-modal-copy"),
+    receiptPreview: $("receipt-preview"),
     receiptPrintArea: $("receipt-print-area"),
     eventLog: $("event-log"),
     authModal: $("auth-modal"),
@@ -578,7 +579,7 @@
   }
 
   function renderReceipt(receipt) {
-    if (!refs.receiptPrintArea || !receipt) return;
+    if (!receipt) return;
 
     const items = receipt.items.length
       ? receipt.items
@@ -606,7 +607,7 @@
           .join("")
       : `<tr><td colspan="3">No item detail available</td></tr>`;
 
-    refs.receiptPrintArea.innerHTML = `
+    const markup = `
       <section class="receipt-paper">
         <h1>Xandora</h1>
         <p class="receipt-type">${escapeHtml(receipt.type || "SALE")}</p>
@@ -639,6 +640,26 @@
         <p class="receipt-footer">Thank you</p>
       </section>
     `;
+
+    if (refs.receiptPreview) refs.receiptPreview.innerHTML = markup;
+    if (refs.receiptPrintArea) refs.receiptPrintArea.innerHTML = markup;
+  }
+
+  function openReceiptModal(receipt, copyText) {
+    if (!receipt) return;
+    state.lastReceipt = receipt;
+    renderReceipt(receipt);
+    refs.checkoutModalCount.textContent = String(receipt.count || receipt.items?.length || 0);
+    refs.checkoutModalSubtotal.textContent = formatMoney(receipt.subtotal, receipt.currency || "LKR");
+    refs.checkoutModalDiscount.textContent = formatMoney(
+      receipt.discount?.amount || 0,
+      receipt.currency || "LKR"
+    );
+    refs.checkoutModalTotal.textContent = formatMoney(receipt.total, receipt.currency || "LKR");
+    refs.checkoutModalCopy.textContent =
+      copyText || "Review the receipt on screen, then print only if the customer needs a paper copy.";
+    refs.checkoutModal.hidden = false;
+    refs.checkoutModalPrint.focus();
   }
 
   function loadRecentBills() {
@@ -685,6 +706,7 @@
         <td>${receipt.count || 0}</td>
         <td>${formatMoney(receipt.total, receipt.currency || "LKR")}</td>
         <td>
+          <button class="btn btn-small btn-outline action-view-bill" data-receipt="${escapeHtml(receipt.receiptNo)}" type="button">View</button>
           <button class="btn btn-small btn-outline action-reprint-bill" data-receipt="${escapeHtml(receipt.receiptNo)}" type="button">Print</button>
         </td>
       </tr>`
@@ -1229,24 +1251,10 @@
       const result = await apiPost("/api/pos/cart/checkout");
       state.lastReceipt = buildReceiptSnapshot(result, checkoutCartSnapshot);
       addRecentBill(state.lastReceipt);
-      renderReceipt(state.lastReceipt);
-      refs.checkoutModalCount.textContent = String(result.items_count || 0);
-      refs.checkoutModalSubtotal.textContent = formatMoney(
-        result.subtotal_amount ?? checkoutCartSnapshot.subtotal ?? checkoutCartSnapshot.total,
-        checkoutCartSnapshot.currency || "LKR"
+      openReceiptModal(
+        state.lastReceipt,
+        "Sale recorded in Xandora. Review the receipt on screen, then print it only if the customer needs a copy."
       );
-      refs.checkoutModalDiscount.textContent = formatMoney(
-        result.discount?.amount ?? checkoutCartSnapshot.discount?.amount ?? 0,
-        checkoutCartSnapshot.currency || "LKR"
-      );
-      refs.checkoutModalTotal.textContent = formatMoney(
-        result.total_amount,
-        checkoutCartSnapshot.currency || "LKR"
-      );
-      refs.checkoutModalCopy.textContent =
-        "Sale recorded in Xandora. Print the bill for the customer, then return to the bill.";
-      refs.checkoutModal.hidden = false;
-      refs.checkoutModalPrint.focus();
       for (const item of checkoutCartSnapshot.items) {
         state.inZone = upsertByEpc(state.inZone, {
           ...item,
@@ -1312,15 +1320,10 @@
         returnCart
       );
       addRecentBill(state.lastReceipt);
-      renderReceipt(state.lastReceipt);
-      refs.checkoutModalCount.textContent = String(result.items_count || 1);
-      refs.checkoutModalSubtotal.textContent = formatMoney(returnCart.subtotal, returnCart.currency);
-      refs.checkoutModalDiscount.textContent = formatMoney(0, returnCart.currency);
-      refs.checkoutModalTotal.textContent = formatMoney(result.total_amount, returnCart.currency);
-      refs.checkoutModalCopy.textContent =
-        "Return recorded in Xandora. Print the return bill for the customer, then return to the bill.";
-      refs.checkoutModal.hidden = false;
-      refs.checkoutModalPrint.focus();
+      openReceiptModal(
+        state.lastReceipt,
+        "Return recorded in Xandora. Review the return receipt on screen, then print it only if the customer needs a copy."
+      );
       if (refs.printBillBtn) refs.printBillBtn.disabled = false;
       if (refs.manualEpc) refs.manualEpc.value = "";
       state.inZone = state.inZone.filter((item) => item.epc !== epc);
@@ -1702,14 +1705,19 @@
 
     if (refs.recentBillsBody) {
       refs.recentBillsBody.addEventListener("click", async (evt) => {
+        const viewBtn = evt.target.closest(".action-view-bill");
         const printBtn = evt.target.closest(".action-reprint-bill");
-        if (!printBtn) return;
-        const receiptNo = printBtn.getAttribute("data-receipt");
+        if (!viewBtn && !printBtn) return;
+        const receiptNo = (viewBtn || printBtn).getAttribute("data-receipt");
         const receipt = state.recentBills.find((row) => row.receiptNo === receiptNo);
         if (!receipt) return;
-        state.lastReceipt = receipt;
-        renderReceipt(state.lastReceipt);
-        await printLastReceipt();
+        openReceiptModal(
+          receipt,
+          "Receipt loaded from recent bills. Review it on screen, or print a copy if needed."
+        );
+        if (printBtn) {
+          await printLastReceipt();
+        }
       });
     }
 

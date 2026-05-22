@@ -400,16 +400,8 @@ async function fetchCatalog(session, limit = 1000) {
 }
 
 async function fetchAssignments(session, limit = 1000) {
-  const catalogItems = await fetchCatalog(session, limit).catch((err) => {
-    console.warn("[retail-console] Falling back to local assignments:", err.message);
-    return [];
-  });
+  const catalogItems = await fetchCatalog(session, limit);
   const byEpc = new Map();
-
-  for (const item of assignmentStore.list(session.selectedStoreId)) {
-    const epc = normalizeEpc(item?.epc);
-    if (epc) byEpc.set(epc, { ...item, epc });
-  }
 
   for (const item of catalogItems) {
     const epc = normalizeEpc(item?.epc);
@@ -419,26 +411,6 @@ async function fetchAssignments(session, limit = 1000) {
       session.state.savedAssignments.set(epc, next);
       rememberSharedAssignment(session.selectedStoreId, next);
     }
-  }
-
-  for (const item of getSharedAssignments(session.selectedStoreId).values()) {
-    const epc = normalizeEpc(item?.epc);
-    if (!epc) continue;
-    byEpc.set(epc, {
-      ...(byEpc.get(epc) || {}),
-      ...item,
-      epc,
-    });
-  }
-
-  for (const item of session.state.savedAssignments.values()) {
-    const epc = normalizeEpc(item?.epc);
-    if (!epc) continue;
-    byEpc.set(epc, {
-      ...(byEpc.get(epc) || {}),
-      ...item,
-      epc,
-    });
   }
 
   return Array.from(byEpc.values()).sort((a, b) =>
@@ -1500,6 +1472,12 @@ app.post("/api/assignments", requireSession, requireSelectedStore, async (req, r
           error: err.message,
         }));
 
+    if (!stockCheck.visible && !stockCheck.catalog_visible) {
+      throw new Error(
+        `Assignment was not confirmed in shared catalog for store ${req.retailSession.selectedStoreId}`
+      );
+    }
+
     if (item.epc) {
       req.retailSession.state.savedAssignments.set(normalizeEpc(item.epc), confirmedItem);
       rememberSharedAssignment(req.retailSession.selectedStoreId, confirmedItem);
@@ -1521,7 +1499,7 @@ app.post("/api/assignments", requireSession, requireSelectedStore, async (req, r
     return res.json({
       ok: true,
       item: confirmedItem,
-      persisted: Boolean(confirmedItem?.epc),
+      persisted: Boolean(stockCheck.visible || stockCheck.catalog_visible),
       stock_visible: Boolean(stockCheck.visible),
       stock_count: Number(stockCheck.count || 0),
       catalog_visible: Boolean(stockCheck.catalog_visible),
