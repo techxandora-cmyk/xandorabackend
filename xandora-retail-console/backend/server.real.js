@@ -514,6 +514,18 @@ async function debugStockEpc(session, epc) {
   );
 }
 
+async function debugCatalogLookup(session, epc) {
+  const normalized = normalizeEpc(epc);
+  if (!normalized) return null;
+  return authorizedFetch(
+    session,
+    "retail",
+    `/api/v1/catalog/lookup?store_id=${encodeURIComponent(
+      session.selectedStoreId
+    )}&epc=${encodeURIComponent(normalized)}`
+  );
+}
+
 async function ingestLiveScan(session, epc) {
   const normalized = normalizeEpc(epc);
   if (!normalized) {
@@ -1471,10 +1483,22 @@ app.post("/api/assignments", requireSession, requireSelectedStore, async (req, r
           ok: false,
           error: err.message,
         }));
+    const catalogDebug =
+      stockCheck.visible || stockCheck.catalog_visible
+        ? null
+        : await debugCatalogLookup(req.retailSession, epc).catch((err) => ({
+            ok: false,
+            error: err.message,
+          }));
 
     if (!stockCheck.visible && !stockCheck.catalog_visible) {
       throw new Error(
-        `Assignment was not confirmed in shared catalog for store ${req.retailSession.selectedStoreId}`
+        [
+          `Assignment was not confirmed in shared catalog for store ${req.retailSession.selectedStoreId}.`,
+          `Upsert returned store=${body?.item?.store_id || "unknown"} epc=${body?.item?.epc || epc}.`,
+          `Catalog lookup found=${catalogDebug?.found ? "yes" : "no"} error=${catalogDebug?.error || "none"}.`,
+          `Stock debug catalog_rows=${stockDebug?.catalog_count || 0} stock_tags=${stockDebug?.stock_summary?.total_tags || 0} error=${stockDebug?.error || stockCheck.error || "none"}.`,
+        ].join(" ")
       );
     }
 
