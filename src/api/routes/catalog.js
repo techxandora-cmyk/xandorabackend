@@ -641,6 +641,26 @@ module.exports = function buildCatalogRoutes(pool) {
           AND ${REAL_CATALOG_ROW_SQL}
         LIMIT 1
       `;
+      const rawVerifySql = `
+        SELECT
+          store_id,
+          epc,
+          sku,
+          product_name,
+          brand,
+          category,
+          size_label,
+          color,
+          price_lkr,
+          metadata,
+          updated_at,
+          ${BARCODE_SQL} AS barcode
+        FROM catalog_items
+        WHERE UPPER(store_id) = UPPER($1)
+          AND epc = $2
+        ORDER BY updated_at DESC
+        LIMIT 1
+      `;
       let verifyResult = { rowCount: 0, rows: [] };
       for (let attempt = 0; attempt < 4; attempt += 1) {
         verifyResult = await client.query(verifySql, [store_id, epc]);
@@ -651,13 +671,34 @@ module.exports = function buildCatalogRoutes(pool) {
       }
 
       if (!verifyResult.rowCount) {
-        console.warn("[catalog/upsert-item] verification not visible after commit; using upsert row", {
-          store_id,
-          epc,
-          sku,
-          product_name,
-          upsert_row: upsertResult.rows[0] || null,
-        });
+        const rawVerifyResult = await client.query(rawVerifySql, [store_id, epc]);
+
+        if (rawVerifyResult.rowCount) {
+          await client.query(
+            `
+            UPDATE catalog_items
+            SET
+              metadata = ((((COALESCE(metadata, '{}'::jsonb) - 'auto_mapped') - 'deleted') - 'deleted_at') - 'deleted_by')
+                || '{"auto_mapped": false, "deleted": false}'::jsonb,
+              updated_at = NOW()
+            WHERE UPPER(store_id) = UPPER($1)
+              AND epc = $2
+            `,
+            [store_id, epc]
+          );
+          verifyResult = await client.query(verifySql, [store_id, epc]);
+        }
+
+        if (!verifyResult.rowCount) {
+          console.warn("[catalog/upsert-item] verification not visible after commit; using upsert row", {
+            store_id,
+            epc,
+            sku,
+            product_name,
+            upsert_row: upsertResult.rows[0] || null,
+            raw_row: rawVerifyResult.rows[0] || null,
+          });
+        }
       }
 
       const persistedItem = verifyResult.rowCount ? mapCatalogRow(verifyResult.rows[0]) : item;
