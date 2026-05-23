@@ -1581,18 +1581,22 @@ app.post("/api/assignments", requireSession, requireSelectedStore, async (req, r
       throw new Error("Assignment was not saved to shared catalog");
     }
 
-    const confirmedItem = (await confirmCatalogItem(req.retailSession, epc)) || item;
-    const stockCheck = await checkStockVisibility(req.retailSession, epc).catch((err) => {
+    let confirmedItem =
+      (await ensureAssignmentPersisted(req.retailSession, item, 2).catch(() => null)) ||
+      (await confirmCatalogItem(req.retailSession, epc)) ||
+      item;
+
+    let stockCheck = await checkStockVisibility(req.retailSession, epc).catch((err) => {
       console.warn("[retail-console] Assignment saved; stock visibility check failed:", err.message);
       return { visible: false, count: 0, summary: null, items: [], error: err.message };
     });
-    const stockDebug = stockCheck.visible
+    let stockDebug = stockCheck.visible
       ? null
       : await debugStockEpc(req.retailSession, epc).catch((err) => ({
           ok: false,
           error: err.message,
         }));
-    const catalogDebug =
+    let catalogDebug =
       stockCheck.visible || stockCheck.catalog_visible
         ? null
         : await debugCatalogLookup(req.retailSession, epc).catch((err) => ({
@@ -1630,6 +1634,41 @@ app.post("/api/assignments", requireSession, requireSelectedStore, async (req, r
           reconciledItem.laundryStatus || confirmedItem.laundryStatus;
         confirmedItem.notes = reconciledItem.notes || confirmedItem.notes;
         confirmedItem.barcode = reconciledItem.barcode || confirmedItem.barcode;
+      }
+
+      stockCheck = await checkStockVisibility(req.retailSession, epc).catch((err) => ({
+        visible: false,
+        count: 0,
+        summary: null,
+        items: [],
+        error: err.message,
+      }));
+      stockDebug = stockCheck.visible
+        ? null
+        : await debugStockEpc(req.retailSession, epc).catch((err) => ({
+            ok: false,
+            error: err.message,
+          }));
+      catalogDebug =
+        stockCheck.visible || stockCheck.catalog_visible
+          ? null
+          : await debugCatalogLookup(req.retailSession, epc).catch((err) => ({
+              ok: false,
+              error: err.message,
+            }));
+
+      if (!stockCheck.visible && !stockCheck.catalog_visible) {
+        throw new Error(
+          [
+            "Assignment did not persist to backend stock.",
+            `store=${req.retailSession.selectedStoreId}`,
+            `epc=${epc}`,
+            `catalog_found=${catalogDebug?.found ? "yes" : "no"}`,
+            `catalog_error=${catalogDebug?.error || "none"}`,
+            `stock_tags=${stockDebug?.stock_summary?.total_tags || 0}`,
+            `stock_error=${stockDebug?.error || stockCheck.error || "none"}`,
+          ].join(" ")
+        );
       }
     }
 
