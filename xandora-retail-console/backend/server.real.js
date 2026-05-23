@@ -45,7 +45,10 @@ function normalizeEpc(value) {
 }
 
 function normalizeStoreId(value) {
-  return String(value || "").trim().toUpperCase();
+  return String(value || "")
+    .trim()
+    .toUpperCase()
+    .replace(/_0*[1-9]\d*$/, "");
 }
 
 function wait(ms) {
@@ -423,24 +426,24 @@ async function fetchAssignments(session, limit = 1000) {
     }
   }
 
-  for (const epc of Array.from(session.state.savedAssignments.keys())) {
-    if (!byEpc.has(epc)) {
-      session.state.savedAssignments.delete(epc);
-    }
-  }
+  const pendingAssignments = [
+    ...assignmentStore.list(storeId),
+    ...getSharedAssignments(session.selectedStoreId).values(),
+    ...session.state.savedAssignments.values(),
+  ];
 
-  const sharedAssignments = getSharedAssignments(session.selectedStoreId);
-  for (const epc of Array.from(sharedAssignments.keys())) {
-    if (!byEpc.has(epc)) {
-      sharedAssignments.delete(epc);
-    }
-  }
-
-  for (const row of assignmentStore.list(storeId)) {
+  for (const row of pendingAssignments) {
     const epc = normalizeEpc(row?.epc);
-    if (epc && !byEpc.has(epc)) {
-      assignmentStore.delete(storeId, epc);
-    }
+    if (!epc || byEpc.has(epc)) continue;
+    const next = {
+      ...row,
+      epc,
+      pendingSync: true,
+    };
+    byEpc.set(epc, next);
+    session.state.savedAssignments.set(epc, next);
+    rememberSharedAssignment(session.selectedStoreId, next);
+    assignmentStore.upsert(storeId, next);
   }
 
   return Array.from(byEpc.values()).sort((a, b) =>
