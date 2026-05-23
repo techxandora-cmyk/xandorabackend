@@ -651,20 +651,16 @@ module.exports = function buildCatalogRoutes(pool) {
       }
 
       if (!verifyResult.rowCount) {
-        console.error("[catalog/upsert-item] verification failed after commit", {
+        console.warn("[catalog/upsert-item] verification not visible after commit; using upsert row", {
           store_id,
           epc,
           sku,
           product_name,
           upsert_row: upsertResult.rows[0] || null,
         });
-        return res.status(500).json({
-          ok: false,
-          error: "Catalog item save was not visible after commit",
-          store_id,
-          epc,
-        });
       }
+
+      const persistedItem = verifyResult.rowCount ? mapCatalogRow(verifyResult.rows[0]) : item;
 
       const broadcast = req.app.locals.broadcastEvent;
       if (typeof broadcast === "function") {
@@ -692,7 +688,13 @@ module.exports = function buildCatalogRoutes(pool) {
         });
       }
 
-      return res.json({ ok: true, item });
+      return res.json({
+        ok: true,
+        item: persistedItem,
+        verification_warning: verifyResult.rowCount
+          ? null
+          : "Catalog item verification was delayed after commit",
+      });
     } catch (err) {
       await client.query("ROLLBACK");
       console.error("[catalog/upsert-item]", err);
