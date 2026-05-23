@@ -402,6 +402,50 @@ function toReturnableZoneItem(item = {}, epc = "") {
   };
 }
 
+function buildAssignmentUpsertPayload(storeId, item = {}) {
+  return {
+    store_id: storeId,
+    epc: normalizeEpc(item.epc),
+    sku: String(item.sku || "").trim() || null,
+    product_name: String(item.product_name || item.name || "").trim(),
+    brand: String(item.brand || "").trim() || null,
+    category: String(item.category || "").trim() || "Retail",
+    size: String(item.size_label || item.size || "").trim() || null,
+    color: String(item.color || "").trim() || null,
+    bin: String(item.bin || "").trim() || null,
+    price: Number(item.price_lkr ?? item.price ?? 0),
+    stock: item.stock != null ? Number(item.stock) : 1,
+    laundryStatus: String(item.laundry_status || item.laundryStatus || "").trim() || null,
+    notes: String(item.notes || "").trim() || null,
+    barcode: String(item.barcode || "").trim() || null,
+  };
+}
+
+async function ensureAssignmentPersisted(session, item = {}, attempts = 2) {
+  const payload = buildAssignmentUpsertPayload(session?.selectedStoreId, item);
+  if (!payload.store_id || !payload.epc || !payload.product_name) {
+    return null;
+  }
+
+  let lastPersisted = null;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const body = await authorizedFetch(session, "retail", "/api/v1/catalog/upsert-item", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    if (body?.ok && body?.item) {
+      lastPersisted = toAssignmentItem(body.item);
+    }
+
+    const confirmed = await confirmCatalogItem(session, payload.epc, 2);
+    if (confirmed?.epc) {
+      return confirmed;
+    }
+  }
+
+  return lastPersisted;
+}
+
 async function fetchCatalog(session, limit = 1000) {
   const body = await authorizedFetch(
     session,
@@ -435,11 +479,25 @@ async function fetchAssignments(session, limit = 1000) {
   for (const row of pendingAssignments) {
     const epc = normalizeEpc(row?.epc);
     if (!epc || byEpc.has(epc)) continue;
-    const next = {
+    let next = {
       ...row,
       epc,
       pendingSync: true,
     };
+
+    try {
+      const persisted = await ensureAssignmentPersisted(session, next, 1);
+      if (persisted?.epc) {
+        next = {
+          ...persisted,
+          epc,
+          pendingSync: false,
+        };
+      }
+    } catch (err) {
+      console.warn("[retail-console] Pending assignment reconcile failed:", err.message);
+    }
+
     byEpc.set(epc, next);
     session.state.savedAssignments.set(epc, next);
     rememberSharedAssignment(session.selectedStoreId, next);
@@ -1554,6 +1612,25 @@ app.post("/api/assignments", requireSession, requireSelectedStore, async (req, r
 
     if (visibilityWarning) {
       console.warn("[retail-console] assignment visibility delayed:", visibilityWarning);
+      const reconciledItem = await ensureAssignmentPersisted(req.retailSession, confirmedItem, 1).catch(
+        () => null
+      );
+      if (reconciledItem?.epc) {
+        confirmedItem.epc = reconciledItem.epc;
+        confirmedItem.sku = reconciledItem.sku || confirmedItem.sku;
+        confirmedItem.name = reconciledItem.name || confirmedItem.name;
+        confirmedItem.brand = reconciledItem.brand || confirmedItem.brand;
+        confirmedItem.category = reconciledItem.category || confirmedItem.category;
+        confirmedItem.bin = reconciledItem.bin || confirmedItem.bin;
+        confirmedItem.size = reconciledItem.size || confirmedItem.size;
+        confirmedItem.color = reconciledItem.color || confirmedItem.color;
+        confirmedItem.price = reconciledItem.price ?? confirmedItem.price;
+        confirmedItem.stock = reconciledItem.stock ?? confirmedItem.stock;
+        confirmedItem.laundryStatus =
+          reconciledItem.laundryStatus || confirmedItem.laundryStatus;
+        confirmedItem.notes = reconciledItem.notes || confirmedItem.notes;
+        confirmedItem.barcode = reconciledItem.barcode || confirmedItem.barcode;
+      }
     }
 
     if (item.epc) {
