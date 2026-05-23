@@ -32,6 +32,10 @@ function normalizeStoreAccessKey(value) {
     .replace(/_0*[1-9]\d*$/, "");
 }
 
+function normalizeStoreId(value) {
+  return normalizeStoreAccessKey(value);
+}
+
 function normalizeEpcList(input, limit = 500) {
   return Array.from(
     new Set(
@@ -165,7 +169,7 @@ module.exports = function buildCatalogRoutes(pool) {
 
   router.get("/", async (req, res) => {
     try {
-      const store_id = req.query.store_id ? String(req.query.store_id) : null;
+      const store_id = normalizeStoreId(req.query.store_id);
       const limit = Math.min(Math.max(Number(req.query.limit || 200), 1), 1000);
 
       if (!store_id) {
@@ -216,7 +220,7 @@ module.exports = function buildCatalogRoutes(pool) {
 
   router.get("/lookup", async (req, res) => {
     try {
-      const store_id = String(req.query.store_id || "").trim();
+      const store_id = normalizeStoreId(req.query.store_id);
       const epc = normalizeEpc(req.query.epc);
       const barcode = normalizeBarcode(req.query.barcode);
       const limit = Math.min(Math.max(Number(req.query.limit || 50), 1), 250);
@@ -322,7 +326,7 @@ module.exports = function buildCatalogRoutes(pool) {
 
   router.post("/lookup/batch", async (req, res) => {
     try {
-      const store_id = String(req.body?.store_id || "").trim();
+      const store_id = normalizeStoreId(req.body?.store_id);
       const epcs = normalizeEpcList(req.body?.epcs, 500);
 
       if (!store_id) {
@@ -379,7 +383,7 @@ module.exports = function buildCatalogRoutes(pool) {
 
   router.post("/assign-items", async (req, res) => {
     try {
-      const store_id = String(req.body?.store_id || "").trim();
+      const store_id = normalizeStoreId(req.body?.store_id);
       const barcode = normalizeBarcode(req.body?.barcode);
       const epcs = normalizeEpcList(req.body?.epcs, 500);
       const quantity = Number(req.body?.quantity || epcs.length || 0);
@@ -488,7 +492,7 @@ module.exports = function buildCatalogRoutes(pool) {
   router.post("/upsert-item", async (req, res) => {
     const client = await pool.connect();
     try {
-      const store_id = String(req.body?.store_id || "").trim();
+      const store_id = normalizeStoreId(req.body?.store_id);
       const epc = normalizeEpc(req.body?.epc);
       const sku = String(req.body?.sku || "").trim() || null;
       const product_name = String(
@@ -755,10 +759,10 @@ module.exports = function buildCatalogRoutes(pool) {
   router.post("/transfer", async (req, res) => {
     const client = await pool.connect();
     try {
-      const source_store_id = String(
-        req.body?.source_store_id || req.body?.store_id || ""
-      ).trim();
-      const destination_store_id = String(req.body?.destination_store_id || "").trim();
+      const source_store_id = normalizeStoreId(
+        req.body?.source_store_id || req.body?.store_id
+      );
+      const destination_store_id = normalizeStoreId(req.body?.destination_store_id);
       const epcs = normalizeEpcList(req.body?.epcs, 500);
       const device_id = String(req.body?.device_id || "").trim() || null;
 
