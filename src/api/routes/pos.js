@@ -7,6 +7,13 @@ const { validationLabel } = require("./lib/retailValidation");
 module.exports = function buildPosRoutes(pool) {
   const router = express.Router();
 
+  function normalizeStoreAccessKey(value) {
+    return String(value || "")
+      .trim()
+      .toUpperCase()
+      .replace(/_0*[1-9]\d*$/, "");
+  }
+
   function normalizedRoles(req) {
     const roleList = Array.isArray(req.user?.roles) ? req.user.roles : [];
     const singleRole = req.user?.role ? [req.user.role] : [];
@@ -56,7 +63,8 @@ module.exports = function buildPosRoutes(pool) {
     if (isAdminUser(req)) return true;
 
     const allowedStores = Array.isArray(req.user?.store_ids) ? req.user.store_ids : [];
-    return allowedStores.includes(storeId);
+    const requestedKey = normalizeStoreAccessKey(storeId);
+    return allowedStores.some((allowedStore) => normalizeStoreAccessKey(allowedStore) === requestedKey);
   }
 
   function buildCartValidation(row) {
