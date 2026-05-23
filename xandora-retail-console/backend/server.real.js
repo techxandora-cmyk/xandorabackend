@@ -411,6 +411,7 @@ async function fetchCatalog(session, limit = 1000) {
 async function fetchAssignments(session, limit = 1000) {
   const catalogItems = await fetchCatalog(session, limit);
   const byEpc = new Map();
+  const storeId = normalizeStoreId(session.selectedStoreId);
 
   for (const item of catalogItems) {
     const epc = normalizeEpc(item?.epc);
@@ -419,6 +420,26 @@ async function fetchAssignments(session, limit = 1000) {
       byEpc.set(epc, next);
       session.state.savedAssignments.set(epc, next);
       rememberSharedAssignment(session.selectedStoreId, next);
+    }
+  }
+
+  for (const epc of Array.from(session.state.savedAssignments.keys())) {
+    if (!byEpc.has(epc)) {
+      session.state.savedAssignments.delete(epc);
+    }
+  }
+
+  const sharedAssignments = getSharedAssignments(session.selectedStoreId);
+  for (const epc of Array.from(sharedAssignments.keys())) {
+    if (!byEpc.has(epc)) {
+      sharedAssignments.delete(epc);
+    }
+  }
+
+  for (const row of assignmentStore.list(storeId)) {
+    const epc = normalizeEpc(row?.epc);
+    if (epc && !byEpc.has(epc)) {
+      assignmentStore.delete(storeId, epc);
     }
   }
 
@@ -709,6 +730,7 @@ function startLiveBridge() {
               if (eventName === "catalog_item_deleted") {
                 session.state.savedAssignments.delete(epc);
                 removeSharedAssignment(session.selectedStoreId, epc);
+                assignmentStore.delete(session.selectedStoreId, epc);
                 getSessionZoneTracker(session)?.remove?.(epc, "catalog_deleted", Date.now());
                 rememberRecentEpc(session.state, epc, {
                   source: "Stock deleted",
@@ -1517,15 +1539,18 @@ app.post("/api/assignments", requireSession, requireSelectedStore, async (req, r
             error: err.message,
           }));
 
-    if (!stockCheck.visible && !stockCheck.catalog_visible) {
-      throw new Error(
-        [
-          `Assignment was not confirmed in shared catalog for store ${req.retailSession.selectedStoreId}.`,
-          `Upsert returned store=${body?.item?.store_id || "unknown"} epc=${body?.item?.epc || epc}.`,
-          `Catalog lookup found=${catalogDebug?.found ? "yes" : "no"} error=${catalogDebug?.error || "none"}.`,
-          `Stock debug catalog_rows=${stockDebug?.catalog_count || 0} stock_tags=${stockDebug?.stock_summary?.total_tags || 0} error=${stockDebug?.error || stockCheck.error || "none"}.`,
-        ].join(" ")
-      );
+    const visibilityWarning =
+      !stockCheck.visible && !stockCheck.catalog_visible
+        ? [
+            `Assignment was not yet confirmed in shared catalog for store ${req.retailSession.selectedStoreId}.`,
+            `Upsert returned store=${body?.item?.store_id || "unknown"} epc=${body?.item?.epc || epc}.`,
+            `Catalog lookup found=${catalogDebug?.found ? "yes" : "no"} error=${catalogDebug?.error || "none"}.`,
+            `Stock debug catalog_rows=${stockDebug?.catalog_count || 0} stock_tags=${stockDebug?.stock_summary?.total_tags || 0} error=${stockDebug?.error || stockCheck.error || "none"}.`,
+          ].join(" ")
+        : null;
+
+    if (visibilityWarning) {
+      console.warn("[retail-console] assignment visibility delayed:", visibilityWarning);
     }
 
     if (item.epc) {
@@ -1553,6 +1578,7 @@ app.post("/api/assignments", requireSession, requireSelectedStore, async (req, r
       stock_visible: Boolean(stockCheck.visible),
       stock_count: Number(stockCheck.count || 0),
       catalog_visible: Boolean(stockCheck.catalog_visible),
+      visibility_warning: visibilityWarning,
       stock_debug: stockDebug,
       stock_summary: stockCheck.summary,
       stock_error: stockCheck.error || null,
