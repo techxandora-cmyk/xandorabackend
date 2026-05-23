@@ -25,6 +25,13 @@ function normalizeBarcode(v) {
   return String(v || "").trim().toUpperCase();
 }
 
+function normalizeStoreAccessKey(value) {
+  return String(value || "")
+    .trim()
+    .toUpperCase()
+    .replace(/_0*[1-9]\d*$/, "");
+}
+
 function normalizeEpcList(input, limit = 500) {
   return Array.from(
     new Set(
@@ -104,7 +111,7 @@ module.exports = function buildCatalogRoutes(pool) {
 
   function canAccessStore(req, store_id) {
     if (!store_id) return false;
-    const normalizedStoreId = String(store_id).trim().toUpperCase();
+    const normalizedStoreId = normalizeStoreAccessKey(store_id);
 
     const roles = Array.isArray(req.user?.roles) ? req.user.roles : [];
     if (
@@ -120,7 +127,7 @@ module.exports = function buildCatalogRoutes(pool) {
       : [];
 
     return allowedStores.some(
-      (allowedStoreId) => String(allowedStoreId || "").trim().toUpperCase() === normalizedStoreId
+      (allowedStoreId) => normalizeStoreAccessKey(allowedStoreId) === normalizedStoreId
     );
   }
 
