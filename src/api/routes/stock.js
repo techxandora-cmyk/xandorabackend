@@ -68,6 +68,10 @@ function normalizeStoreAccessKey(value) {
     .replace(/_0*[1-9]\d*$/, "");
 }
 
+function normalizeStoreId(value) {
+  return normalizeStoreAccessKey(value);
+}
+
 function actorFromRequest(req) {
   return {
     actor_user_id: Number(req.user?.user_id) || null,
@@ -331,7 +335,7 @@ module.exports = function buildStockRoutes(pool) {
 
   router.get("/search", async (req, res) => {
     try {
-      const store_id = req.query.store_id ? String(req.query.store_id) : null;
+      const store_id = normalizeStoreId(req.query.store_id);
       const q = String(req.query.q || "").trim();
       const brand = String(req.query.brand || "").trim();
       const barcode = String(req.query.barcode || "").trim();
@@ -466,7 +470,7 @@ module.exports = function buildStockRoutes(pool) {
 
   router.get("/debug-epc", async (req, res) => {
     try {
-      const store_id = req.query.store_id ? String(req.query.store_id).trim() : "";
+      const store_id = normalizeStoreId(req.query.store_id);
       const epc = normalizeEpc(req.query.epc);
 
       if (!store_id) {
@@ -539,7 +543,7 @@ module.exports = function buildStockRoutes(pool) {
 
   router.get("/epcs", async (req, res) => {
     try {
-      const store_id = req.query.store_id ? String(req.query.store_id) : null;
+      const store_id = normalizeStoreId(req.query.store_id);
       const group_key = req.query.group_key ? String(req.query.group_key) : "";
       const limit = Math.min(Math.max(Number(req.query.limit || 500), 1), 2000);
       const offset = Math.max(Number(req.query.offset || 0), 0);
@@ -641,7 +645,7 @@ module.exports = function buildStockRoutes(pool) {
   router.delete("/epcs/:epc", async (req, res) => {
     const client = await pool.connect();
     try {
-      const store_id = req.query.store_id ? String(req.query.store_id).trim() : "";
+      const store_id = normalizeStoreId(req.query.store_id);
       const epc = normalizeEpc(req.params.epc);
 
       if (!store_id) {
@@ -760,7 +764,7 @@ module.exports = function buildStockRoutes(pool) {
 
   router.get("/insights", async (req, res) => {
     try {
-      const store_id = req.query.store_id ? String(req.query.store_id) : null;
+      const store_id = normalizeStoreId(req.query.store_id);
       const limit = Math.min(Math.max(Number(req.query.limit || 5), 1), 20);
       const risk_limit = Math.min(
         Math.max(Number(req.query.risk_limit || Math.max(limit * 4, 50)), 10),
